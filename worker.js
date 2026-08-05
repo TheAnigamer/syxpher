@@ -22,6 +22,12 @@ export default {
       });
     }
 
-    return new Response("WORKER OK");
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+
+    return new Response("Site assets unavailable", {
+      status: 500
+    });
   }
 };
