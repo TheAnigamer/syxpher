@@ -4,6 +4,7 @@ function base32Decode(input) {
   input = input.replace(/[\s=]/g, "").toUpperCase();
 
   let bits = "";
+
   for (const char of input) {
     const value = BASE32.indexOf(char);
     if (value < 0) continue;
@@ -11,6 +12,7 @@ function base32Decode(input) {
   }
 
   const bytes = [];
+
   for (let i = 0; i + 8 <= bits.length; i += 8) {
     bytes.push(parseInt(bits.slice(i, i + 8), 2));
   }
@@ -18,7 +20,7 @@ function base32Decode(input) {
   return new Uint8Array(bytes);
 }
 
-async function generateTOTP(secret, timeStep = 30) {
+async function generateTOTP(secret, counter) {
   const key = await crypto.subtle.importKey(
     "raw",
     base32Decode(secret),
@@ -27,7 +29,6 @@ async function generateTOTP(secret, timeStep = 30) {
     ["sign"]
   );
 
-  const counter = Math.floor(Date.now() / 1000 / timeStep);
   const buffer = new ArrayBuffer(8);
   const view = new DataView(buffer);
 
@@ -49,10 +50,24 @@ async function generateTOTP(secret, timeStep = 30) {
   return String(binary % 1000000).padStart(6, "0");
 }
 
+async function verifyTOTP(secret, code) {
+  const counter = Math.floor(Date.now() / 1000 / 30);
+
+  // Allow 30 seconds before/after to handle small clock differences.
+  for (const offset of [-1, 0, 1]) {
+    if (await generateTOTP(secret, counter + offset) === code) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // Google Authenticator verification
     if (url.pathname === "/api/verify" && request.method === "POST") {
       try {
         const { code } = await request.json();
@@ -61,18 +76,35 @@ export default {
           return Response.json({ ok: false });
         }
 
-        const current = await generateTOTP(env.TOTP_SECRET);
+        const valid = await verifyTOTP(env.TOTP_SECRET, code);
 
-        if (code === current) {
-          return Response.json({ ok: true });
-        }
-
-        return Response.json({ ok: false });
+        return Response.json({ ok: valid });
       } catch {
         return Response.json({ ok: false }, { status: 400 });
       }
     }
 
+    // Geometry Dash levels API
+    if (url.pathname === "/api/levels") {
+      const apiResponse = await fetch(
+        "https://gd-sync-308073055710.us-south1.run.app/?mode=curated",
+        {
+          headers: {
+            Accept: "application/json"
+          }
+        }
+      );
+
+      return new Response(apiResponse.body, {
+        status: apiResponse.status,
+        headers: {
+          "Content-Type":
+            apiResponse.headers.get("Content-Type") || "application/json",
+          "Cache-Control": "no-store"
+        }
+      });
+    }
+
     return env.ASSETS.fetch(request);
-  },
+  }
 };
