@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!lock) return;
 
   lock.addEventListener('click', async () => {
-    const code = prompt('Enter your 6-digit Google Authenticator code:');
+    const code = prompt('Enter your Authenticator code:');
 
     if (!code) return;
 
