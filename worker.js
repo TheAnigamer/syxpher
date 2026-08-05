@@ -22,6 +22,6 @@ export default {
       });
     }
 
-    return env.ASSETS.fetch(request);
+    return new Response("WORKER OK");
   }
 };
