@@ -1,5 +1,5 @@
 // ==========================================
-// SYXPHER SITE JS
+// SYXPHER SITE.JS
 // ==========================================
 
 
@@ -8,142 +8,325 @@
 // ==========================================
 
 (() => {
-  const loadingScreen = document.createElement('div');
+  const loadingStart = performance.now();
 
-  loadingScreen.id = 'syx-loading-screen';
+  const MIN_LOADING_TIME = 1500;
+  const FADE_DURATION = 700;
 
-  loadingScreen.innerHTML = `
-    <div class="syx-loading-inner">
-      <div class="syx-loading-logo">
-        SYXPHER
+  function createLoadingScreen() {
+    if (document.getElementById('syx-loading-screen')) {
+      return;
+    }
+
+    const loading = document.createElement('div');
+
+    loading.id = 'syx-loading-screen';
+
+    loading.innerHTML = `
+      <div class="syx-loading-inner">
+
+        <div class="syx-loading-logo">
+          SYXPHER
+        </div>
+
+        <div class="syx-loading-status">
+          INITIALIZING SYSTEM
+        </div>
+
+        <div class="syx-loading-bar">
+          <div class="syx-loading-progress"></div>
+        </div>
+
+        <div class="syx-loading-percent">
+          0%
+        </div>
+
       </div>
+    `;
 
-      <div class="syx-loading-line">
-        <div class="syx-loading-progress"></div>
-      </div>
+    document.body.appendChild(loading);
 
-      <div class="syx-loading-status">
-        INITIALIZING...
-      </div>
-    </div>
-  `;
+    injectLoadingStyles();
 
-  const style = document.createElement('style');
+    const progress =
+      loading.querySelector(
+        '.syx-loading-progress'
+      );
 
-  style.id = 'syx-loading-styles';
+    const percent =
+      loading.querySelector(
+        '.syx-loading-percent'
+      );
 
-  style.textContent = `
-    #syx-loading-screen {
-      position: fixed;
-      inset: 0;
-      z-index: 1000000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #0A0A0B;
-      color: white;
-      opacity: 1;
-      visibility: visible;
-      transition:
-        opacity .5s ease,
-        visibility .5s ease;
-    }
+    let currentProgress = 0;
 
-    #syx-loading-screen.syx-loading-hidden {
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-    }
+    const progressInterval =
+      window.setInterval(() => {
 
-    .syx-loading-inner {
-      width: min(420px, calc(100vw - 50px));
-      text-align: center;
-    }
+        if (
+          currentProgress >= 90
+        ) {
+          window.clearInterval(
+            progressInterval
+          );
 
-    .syx-loading-logo {
-      margin-bottom: 24px;
-      color: white;
-      font-family:
-        Arial,
-        Helvetica,
-        sans-serif;
-      font-size: 28px;
-      font-weight: 800;
-      letter-spacing: .18em;
-    }
+          return;
+        }
 
-    .syx-loading-line {
-      position: relative;
-      width: 100%;
-      height: 2px;
-      overflow: hidden;
-      background: rgba(255,255,255,.12);
-    }
+        currentProgress +=
+          Math.random() * 5 + 1;
 
-    .syx-loading-progress {
-      width: 35%;
-      height: 100%;
-      background: #FF9E00;
-      box-shadow:
-        0 0 12px rgba(255,158,0,.7);
-      animation:
-        syxLoadingProgress
-        1.2s
-        ease-in-out
-        infinite;
-    }
+        if (
+          currentProgress > 90
+        ) {
+          currentProgress = 90;
+        }
 
-    .syx-loading-status {
-      margin-top: 14px;
-      color: rgba(255,255,255,.4);
-      font-family: monospace;
-      font-size: 10px;
-      letter-spacing: .18em;
-    }
+        progress.style.width =
+          `${currentProgress}%`;
 
-    @keyframes syxLoadingProgress {
-      0% {
-        transform: translateX(-130%);
-      }
+        percent.textContent =
+          `${Math.floor(currentProgress)}%`;
 
-      50% {
-        transform: translateX(170%);
-      }
+      }, 80);
+  }
 
-      100% {
-        transform: translateX(300%);
-      }
-    }
-  `;
 
-  document.head.appendChild(style);
-  document.documentElement.appendChild(loadingScreen);
-
-  window.syxHideLoadingScreen = () => {
-    const screen =
+  function finishLoadingScreen() {
+    const loading =
       document.getElementById(
         'syx-loading-screen'
       );
 
-    if (!screen) return;
+    if (!loading) return;
 
-    screen.classList.add(
-      'syx-loading-hidden'
-    );
+    const elapsed =
+      performance.now() -
+      loadingStart;
+
+    const remaining =
+      Math.max(
+        0,
+        MIN_LOADING_TIME - elapsed
+      );
 
     window.setTimeout(() => {
-      screen.remove();
 
-      const loadingStyles =
-        document.getElementById(
-          'syx-loading-styles'
+      const progress =
+        loading.querySelector(
+          '.syx-loading-progress'
         );
 
-      if (loadingStyles) {
-        loadingStyles.remove();
+      const percent =
+        loading.querySelector(
+          '.syx-loading-percent'
+        );
+
+      if (progress) {
+        progress.style.width =
+          '100%';
       }
-    }, 600);
-  };
+
+      if (percent) {
+        percent.textContent =
+          '100%';
+      }
+
+      loading.classList.add(
+        'complete'
+      );
+
+      window.setTimeout(() => {
+        loading.remove();
+      }, FADE_DURATION);
+
+    }, remaining);
+  }
+
+
+  function injectLoadingStyles() {
+
+    if (
+      document.getElementById(
+        'syx-loading-styles'
+      )
+    ) {
+      return;
+    }
+
+    const style =
+      document.createElement(
+        'style'
+      );
+
+    style.id =
+      'syx-loading-styles';
+
+    style.textContent = `
+      #syx-loading-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #0A0A0B;
+        color: white;
+        opacity: 1;
+        visibility: visible;
+        transition:
+          opacity .7s cubic-bezier(.4,0,.2,1),
+          visibility .7s ease;
+      }
+
+      #syx-loading-screen.complete {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .syx-loading-inner {
+        width: min(420px, calc(100vw - 60px));
+        text-align: center;
+      }
+
+      .syx-loading-logo {
+        font-family:
+          Arial,
+          Helvetica,
+          sans-serif;
+
+        font-size: clamp(
+          28px,
+          6vw,
+          52px
+        );
+
+        font-weight: 800;
+        letter-spacing: .18em;
+        margin-left: .18em;
+
+        color: white;
+
+        animation:
+          syxLoadingPulse
+          2s
+          ease-in-out
+          infinite;
+      }
+
+      .syx-loading-status {
+        margin-top: 18px;
+
+        font-family:
+          monospace;
+
+        font-size: 10px;
+        letter-spacing: .22em;
+
+        color:
+          rgba(255,255,255,.4);
+
+        text-transform:
+          uppercase;
+      }
+
+      .syx-loading-bar {
+        position: relative;
+
+        width: 100%;
+        height: 2px;
+
+        margin-top: 28px;
+
+        overflow: hidden;
+
+        background:
+          rgba(255,255,255,.08);
+      }
+
+      .syx-loading-progress {
+        position: absolute;
+
+        top: 0;
+        left: 0;
+
+        width: 0%;
+        height: 100%;
+
+        background: #FF9E00;
+
+        box-shadow:
+          0 0 12px
+          rgba(255,158,0,.6);
+
+        transition:
+          width .25s
+          cubic-bezier(.4,0,.2,1);
+      }
+
+      .syx-loading-percent {
+        margin-top: 12px;
+
+        font-family:
+          monospace;
+
+        font-size: 10px;
+        letter-spacing: .12em;
+
+        color:
+          rgba(255,255,255,.3);
+      }
+
+      @keyframes syxLoadingPulse {
+        0%,
+        100% {
+          opacity: .45;
+          transform: scale(.98);
+        }
+
+        50% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      @media (
+        prefers-reduced-motion: reduce
+      ) {
+        .syx-loading-logo {
+          animation: none;
+        }
+
+        #syx-loading-screen {
+          transition-duration: .2s;
+        }
+      }
+    `;
+
+    document.head.appendChild(
+      style
+    );
+  }
+
+
+  if (
+    document.readyState ===
+    'loading'
+  ) {
+    document.addEventListener(
+      'DOMContentLoaded',
+      createLoadingScreen
+    );
+  } else {
+    createLoadingScreen();
+  }
+
+
+  window.addEventListener(
+    'load',
+    finishLoadingScreen
+  );
 })();
 
 
@@ -153,7 +336,9 @@
 
 (() => {
   const clock =
-    document.getElementById('utc-clock');
+    document.getElementById(
+      'utc-clock'
+    );
 
   if (!clock) return;
 
@@ -161,13 +346,16 @@
     const now = new Date();
 
     const time =
-      new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'UTC',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      }).format(now);
+      new Intl.DateTimeFormat(
+        'en-GB',
+        {
+          timeZone: 'UTC',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }
+      ).format(now);
 
     clock.textContent =
       `${time} · UTC`;
@@ -195,11 +383,26 @@ let siteSettings = {};
 
 function escapeHtml(value) {
   return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(
+      /&/g,
+      '&amp;'
+    )
+    .replace(
+      /</g,
+      '&lt;'
+    )
+    .replace(
+      />/g,
+      '&gt;'
+    )
+    .replace(
+      /"/g,
+      '&quot;'
+    )
+    .replace(
+      /'/g,
+      '&#039;'
+    );
 }
 
 
@@ -264,6 +467,7 @@ async function adminFetch(
 document.addEventListener(
   'DOMContentLoaded',
   () => {
+
     const lock =
       document.getElementById(
         'admin-lock'
@@ -271,9 +475,11 @@ document.addEventListener(
 
     if (!lock) return;
 
+
     if (
       isAdminAuthenticated()
     ) {
+
       lock.textContent =
         '🔓';
 
@@ -282,6 +488,7 @@ document.addEventListener(
 
       createAdminPanel();
     }
+
 
     lock.addEventListener(
       'click',
@@ -294,6 +501,7 @@ document.addEventListener(
           return;
         }
 
+
         const code =
           prompt(
             'Enter your Authenticator code:'
@@ -301,16 +509,20 @@ document.addEventListener(
 
         if (!code) return;
 
+
         try {
+
           const response =
             await fetch(
               '/api/verify',
               {
                 method: 'POST',
+
                 headers: {
                   'Content-Type':
                     'application/json'
                 },
+
                 body:
                   JSON.stringify({
                     code:
@@ -319,8 +531,10 @@ document.addEventListener(
               }
             );
 
+
           const result =
             await response.json();
+
 
           if (result.ok) {
 
@@ -329,12 +543,15 @@ document.addEventListener(
               'true'
             );
 
+
             if (result.token) {
+
               sessionStorage.setItem(
                 'adminToken',
                 result.token
               );
             }
+
 
             lock.textContent =
               '🔓';
@@ -342,15 +559,19 @@ document.addEventListener(
             lock.title =
               'Admin Mode Enabled';
 
+
             createAdminPanel();
+
 
             alert(
               'Admin mode enabled.'
             );
 
+
             openAdminPanel();
 
           } else {
+
             alert(
               'Invalid Authenticator code.'
             );
@@ -389,26 +610,33 @@ async function loadSiteSettings() {
         }
       );
 
+
     if (!response.ok) {
+
       throw new Error(
         `Settings API returned ${response.status}`
       );
     }
 
+
     const settings =
       await response.json();
+
 
     if (
       !settings ||
       typeof settings !== 'object'
     ) {
+
       throw new Error(
         'Invalid settings response'
       );
     }
 
+
     siteSettings =
       settings;
+
 
     applySiteSettings();
 
@@ -433,6 +661,7 @@ function applySiteSettings() {
       'h1.font-heading'
     );
 
+
   if (heroTitle) {
 
     const spans =
@@ -440,19 +669,25 @@ function applySiteSettings() {
         ':scope > span'
       );
 
+
     if (spans[0]) {
+
       spans[0].textContent =
         siteSettings.hero_title_1 ||
         spans[0].textContent;
     }
 
+
     if (spans[1]) {
+
       spans[1].textContent =
         siteSettings.hero_title_2 ||
         spans[1].textContent;
     }
 
+
     if (spans[2]) {
+
       spans[2].textContent =
         siteSettings.hero_title_3 ||
         spans[2].textContent;
@@ -465,7 +700,9 @@ function applySiteSettings() {
       'section:first-of-type p.text-white\\/60'
     );
 
+
   if (heroDescription) {
+
     heroDescription.textContent =
       siteSettings.hero_subtitle ||
       heroDescription.textContent;
@@ -477,6 +714,7 @@ function applySiteSettings() {
       'stream'
     );
 
+
   if (stream) {
 
     const label =
@@ -484,16 +722,20 @@ function applySiteSettings() {
         ':scope > div:first-child span.font-mono-tech'
       );
 
+
     if (label) {
+
       label.textContent =
         siteSettings.stream_label ||
         label.textContent;
     }
 
+
     const title =
       stream.querySelector(
         'h2.font-heading'
       );
+
 
     if (title) {
 
@@ -501,6 +743,7 @@ function applySiteSettings() {
         title.querySelectorAll(
           ':scope > span'
         );
+
 
       const textNodes =
         Array.from(
@@ -512,27 +755,34 @@ function applySiteSettings() {
             node.textContent.trim()
         );
 
+
       if (
         textNodes[0] &&
         siteSettings.stream_title_1
       ) {
+
         textNodes[0].textContent =
           `\n          ${siteSettings.stream_title_1}\n          `;
       }
 
+
       if (spans[0]) {
+
         spans[0].textContent =
           siteSettings.stream_title_2 ||
           spans[0].textContent;
       }
     }
 
+
     const description =
       stream.querySelector(
         ':scope > div:first-child p'
       );
 
+
     if (description) {
+
       description.textContent =
         siteSettings.stream_description ||
         description.textContent;
@@ -545,6 +795,7 @@ function applySiteSettings() {
       'archive'
     );
 
+
   if (archive) {
 
     const label =
@@ -552,16 +803,20 @@ function applySiteSettings() {
         ':scope > div:first-child span.font-mono-tech'
       );
 
+
     if (label) {
+
       label.textContent =
         siteSettings.archive_label ||
         label.textContent;
     }
 
+
     const title =
       archive.querySelector(
         'h2.font-heading'
       );
+
 
     if (title) {
 
@@ -569,6 +824,7 @@ function applySiteSettings() {
         title.querySelectorAll(
           ':scope > span'
         );
+
 
       const textNodes =
         Array.from(
@@ -580,27 +836,34 @@ function applySiteSettings() {
             node.textContent.trim()
         );
 
+
       if (
         textNodes[0] &&
         siteSettings.archive_title_1
       ) {
+
         textNodes[0].textContent =
           `\n         ${siteSettings.archive_title_1}\n         `;
       }
 
+
       if (spans[0]) {
+
         spans[0].textContent =
           siteSettings.archive_title_2 ||
           spans[0].textContent;
       }
     }
 
+
     const description =
       archive.querySelector(
         ':scope > div:first-child p'
       );
 
+
     if (description) {
+
       description.textContent =
         siteSettings.archive_description ||
         description.textContent;
@@ -613,6 +876,7 @@ function applySiteSettings() {
       'contact'
     );
 
+
   if (contact) {
 
     const label =
@@ -620,16 +884,20 @@ function applySiteSettings() {
         ':scope > div span.font-mono-tech'
       );
 
+
     if (label) {
+
       label.textContent =
         siteSettings.contact_label ||
         label.textContent;
     }
 
+
     const title =
       contact.querySelector(
         'h2.font-heading'
       );
+
 
     if (title) {
 
@@ -637,6 +905,7 @@ function applySiteSettings() {
         title.querySelectorAll(
           ':scope > span'
         );
+
 
       const textNodes =
         Array.from(
@@ -648,15 +917,19 @@ function applySiteSettings() {
             node.textContent.trim()
         );
 
+
       if (
         textNodes[0] &&
         siteSettings.contact_title_1
       ) {
+
         textNodes[0].textContent =
           `\n        ${siteSettings.contact_title_1}\n        `;
       }
 
+
       if (spans[0]) {
+
         spans[0].textContent =
           siteSettings.contact_title_2 ||
           spans[0].textContent;
@@ -670,6 +943,7 @@ function applySiteSettings() {
       'footer'
     );
 
+
   if (footer) {
 
     const footerTexts =
@@ -677,13 +951,17 @@ function applySiteSettings() {
         'div.relative.z-10.mt-20 span'
       );
 
+
     if (footerTexts[0]) {
+
       footerTexts[0].textContent =
         siteSettings.copyright_text ||
         footerTexts[0].textContent;
     }
 
+
     if (footerTexts[1]) {
+
       footerTexts[1].textContent =
         siteSettings.footer_text ||
         footerTexts[1].textContent;
@@ -695,23 +973,28 @@ function applySiteSettings() {
         'a.group'
       );
 
+
     if (links[0]) {
 
       links[0].href =
         siteSettings.discord_url ||
         links[0].href;
 
+
       const label =
         links[0].querySelector(
           'span.font-mono-tech'
         );
 
+
       if (label) {
+
         label.textContent =
           siteSettings.discord_label ||
           label.textContent;
       }
     }
+
 
     if (links[1]) {
 
@@ -719,17 +1002,21 @@ function applySiteSettings() {
         siteSettings.youtube_url ||
         links[1].href;
 
+
       const label =
         links[1].querySelector(
           'span.font-mono-tech'
         );
 
+
       if (label) {
+
         label.textContent =
           siteSettings.youtube_label ||
           label.textContent;
       }
     }
+
 
     if (links[2]) {
 
@@ -737,12 +1024,15 @@ function applySiteSettings() {
         siteSettings.newgrounds_url ||
         links[2].href;
 
+
       const label =
         links[2].querySelector(
           'span.font-mono-tech'
         );
 
+
       if (label) {
+
         label.textContent =
           siteSettings.newgrounds_label ||
           label.textContent;
@@ -769,46 +1059,61 @@ async function loadShowcase() {
         }
       );
 
+
     if (!response.ok) {
+
       throw new Error(
         `Showcase API returned ${response.status}`
       );
     }
 
+
     const items =
       await response.json();
 
+
     if (!Array.isArray(items)) {
+
       throw new Error(
         'Invalid showcase API response'
       );
     }
+
 
     const stream =
       document.getElementById(
         'stream'
       );
 
+
     if (!stream) return;
+
 
     const articles =
       stream.querySelectorAll(
         'article'
       );
 
+
     if (!articles.length) {
+
       console.warn(
         'No showcase articles found.'
       );
+
       return;
     }
+
 
     const container =
       articles[0].parentElement;
 
+
     if (!container) return;
 
+
     container.innerHTML = '';
+
 
     items.forEach(
       (item, index) => {
@@ -818,24 +1123,30 @@ async function loadShowcase() {
             'article'
           );
 
+
         article.className =
           'group relative w-full aspect-[16/9] md:aspect-[21/9] overflow-hidden cursor-pointer bg-[#111]';
+
 
         const image =
           item.image ||
           './assets/embedded-image-2.jpg';
 
+
         const title =
           item.title ||
           'Untitled';
+
 
         const category =
           item.category ||
           '';
 
+
         const description =
           item.description ||
           '';
+
 
         article.innerHTML = `
           <img
@@ -884,12 +1195,15 @@ async function loadShowcase() {
           <div
             class="absolute bottom-0 left-0 right-0 p-6 md:p-10"
           >
+
             <div class="overflow-hidden">
+
               <span
                 class="font-mono-tech text-xs uppercase tracking-widest text-[#FF9E00] block mb-2"
               >
                 ${escapeHtml(category)}
               </span>
+
             </div>
 
             <h3
@@ -903,14 +1217,17 @@ async function loadShowcase() {
             >
               ${escapeHtml(description)}
             </p>
+
           </div>
         `;
+
 
         if (item.link) {
 
           article.addEventListener(
             'click',
             () => {
+
               window.open(
                 item.link,
                 '_blank',
@@ -920,11 +1237,13 @@ async function loadShowcase() {
           );
         }
 
+
         container.appendChild(
           article
         );
       }
     );
+
 
     console.log(
       `Loaded ${items.length} showcase items from D1.`
@@ -954,13 +1273,16 @@ function createAdminPanel() {
     return;
   }
 
+
   const panel =
     document.createElement(
       'div'
     );
 
+
   panel.id =
     'syxpher-admin-panel';
+
 
   panel.innerHTML = `
     <div
@@ -973,6 +1295,7 @@ function createAdminPanel() {
       <div class="syx-admin-header">
 
         <div>
+
           <div class="syx-admin-kicker">
             ADMIN CONTROL
           </div>
@@ -980,6 +1303,7 @@ function createAdminPanel() {
           <h2>
             Site Editor
           </h2>
+
         </div>
 
         <button
@@ -991,7 +1315,6 @@ function createAdminPanel() {
         </button>
 
       </div>
-
 
       <div class="syx-admin-content">
 
@@ -1254,11 +1577,14 @@ function createAdminPanel() {
     </div>
   `;
 
+
   document.body.appendChild(
     panel
   );
 
+
   injectAdminStyles();
+
 
   document
     .getElementById(
@@ -1269,6 +1595,7 @@ function createAdminPanel() {
       closeAdminPanel
     );
 
+
   document
     .getElementById(
       'syx-admin-overlay'
@@ -1277,6 +1604,7 @@ function createAdminPanel() {
       'click',
       closeAdminPanel
     );
+
 
   document
     .getElementById(
@@ -1287,6 +1615,7 @@ function createAdminPanel() {
       saveSiteSettings
     );
 
+
   document
     .getElementById(
       'syx-admin-logout'
@@ -1296,9 +1625,14 @@ function createAdminPanel() {
       logoutAdmin
     );
 
+
   populateAdminFields();
 }
 
+
+// ==========================================
+// OPEN ADMIN PANEL
+// ==========================================
 
 function openAdminPanel() {
 
@@ -1306,10 +1640,12 @@ function openAdminPanel() {
 
   populateAdminFields();
 
+
   const panel =
     document.getElementById(
       'syxpher-admin-panel'
     );
+
 
   if (panel) {
 
@@ -1320,12 +1656,17 @@ function openAdminPanel() {
 }
 
 
+// ==========================================
+// CLOSE ADMIN PANEL
+// ==========================================
+
 function closeAdminPanel() {
 
   const panel =
     document.getElementById(
       'syxpher-admin-panel'
     );
+
 
   if (panel) {
 
@@ -1335,6 +1676,10 @@ function closeAdminPanel() {
   }
 }
 
+
+// ==========================================
+// POPULATE ADMIN FIELDS
+// ==========================================
 
 function populateAdminFields() {
 
@@ -1348,7 +1693,9 @@ function populateAdminFields() {
           `setting-${key}`
         );
 
+
       if (input) {
+
         input.value =
           value ?? '';
       }
@@ -1368,14 +1715,17 @@ async function saveSiteSettings() {
       'syx-admin-save'
     );
 
+
   const status =
     document.getElementById(
       'syx-admin-status'
     );
 
+
   if (!button || !status) {
     return;
   }
+
 
   const keys = [
 
@@ -1409,9 +1759,12 @@ async function saveSiteSettings() {
 
     'newgrounds_label',
     'newgrounds_url'
+
   ];
 
+
   const data = {};
+
 
   for (const key of keys) {
 
@@ -1420,11 +1773,14 @@ async function saveSiteSettings() {
         `setting-${key}`
       );
 
+
     if (input) {
+
       data[key] =
         input.value;
     }
   }
+
 
   button.disabled =
     true;
@@ -1432,8 +1788,10 @@ async function saveSiteSettings() {
   button.textContent =
     'Saving...';
 
+
   status.textContent =
     '';
+
 
   try {
 
@@ -1442,17 +1800,21 @@ async function saveSiteSettings() {
         '/api/admin/site-settings',
         {
           method: 'PUT',
+
           headers: {
             'Content-Type':
               'application/json'
           },
+
           body:
             JSON.stringify(data)
         }
       );
 
+
     const result =
       await response.json();
+
 
     if (!response.ok) {
 
@@ -1468,11 +1830,13 @@ async function saveSiteSettings() {
         );
       }
 
+
       throw new Error(
         result.error ||
         'Could not save settings.'
       );
     }
+
 
     siteSettings =
       {
@@ -1480,10 +1844,13 @@ async function saveSiteSettings() {
         ...data
       };
 
+
     applySiteSettings();
+
 
     status.textContent =
       'Changes saved successfully.';
+
 
     status.className =
       'syx-admin-status success';
@@ -1492,8 +1859,10 @@ async function saveSiteSettings() {
 
     console.error(error);
 
+
     status.textContent =
       error.message;
+
 
     status.className =
       'syx-admin-status error';
@@ -1519,16 +1888,20 @@ function logoutAdmin() {
     'adminAuthenticated'
   );
 
+
   sessionStorage.removeItem(
     'adminToken'
   );
 
+
   closeAdminPanel();
+
 
   const lock =
     document.getElementById(
       'admin-lock'
     );
+
 
   if (lock) {
 
@@ -1555,13 +1928,16 @@ function injectAdminStyles() {
     return;
   }
 
+
   const style =
     document.createElement(
       'style'
     );
 
+
   style.id =
     'syx-admin-styles';
+
 
   style.textContent = `
     #syxpher-admin-panel {
@@ -1594,19 +1970,46 @@ function injectAdminStyles() {
       position: absolute;
       top: 50%;
       left: 50%;
-      width: min(760px, calc(100vw - 30px));
-      max-height: calc(100vh - 30px);
+
+      width:
+        min(
+          760px,
+          calc(100vw - 30px)
+        );
+
+      max-height:
+        calc(100vh - 30px);
+
       transform:
-        translate(-50%, -46%);
+        translate(
+          -50%,
+          -46%
+        );
+
       opacity: 0;
       overflow: hidden;
-      background: #0d0d0f;
+
+      background:
+        #0d0d0f;
+
       border:
         1px solid
-        rgba(255, 158, 0, .35);
+        rgba(
+          255,
+          158,
+          0,
+          .35
+        );
+
       box-shadow:
         0 30px 100px
-        rgba(0,0,0,.65);
+        rgba(
+          0,
+          0,
+          0,
+          .65
+        );
+
       transition:
         opacity .2s ease,
         transform .2s ease;
@@ -1615,173 +2018,346 @@ function injectAdminStyles() {
     #syxpher-admin-panel.open
     .syx-admin-window {
       opacity: 1;
+
       transform:
-        translate(-50%, -50%);
+        translate(
+          -50%,
+          -50%
+        );
     }
 
     .syx-admin-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 22px 24px;
+
+      padding:
+        22px 24px;
+
       border-bottom:
         1px solid
-        rgba(255,255,255,.1);
-      background: #111114;
+        rgba(
+          255,
+          255,
+          255,
+          .1
+        );
+
+      background:
+        #111114;
     }
 
     .syx-admin-kicker {
-      color: #00f5ff;
-      font-size: 10px;
-      letter-spacing: .2em;
-      margin-bottom: 6px;
+      color:
+        #00f5ff;
+
+      font-size:
+        10px;
+
+      letter-spacing:
+        .2em;
+
+      margin-bottom:
+        6px;
     }
 
     .syx-admin-header h2 {
       margin: 0;
-      color: white;
-      font-family: sans-serif;
-      font-size: 28px;
+
+      color:
+        white;
+
+      font-family:
+        sans-serif;
+
+      font-size:
+        28px;
     }
 
     .syx-admin-close {
-      width: 38px;
-      height: 38px;
+      width:
+        38px;
+
+      height:
+        38px;
+
       border:
         1px solid
-        rgba(255,255,255,.15);
-      background: transparent;
+        rgba(
+          255,
+          255,
+          255,
+          .15
+        );
+
+      background:
+        transparent;
+
       color:
-        rgba(255,255,255,.6);
-      font-size: 25px;
-      cursor: pointer;
+        rgba(
+          255,
+          255,
+          255,
+          .6
+        );
+
+      font-size:
+        25px;
+
+      cursor:
+        pointer;
     }
 
     .syx-admin-close:hover {
-      color: #ff9e00;
-      border-color: #ff9e00;
+      color:
+        #ff9e00;
+
+      border-color:
+        #ff9e00;
     }
 
     .syx-admin-content {
-      padding: 24px;
-      overflow-y: auto;
+      padding:
+        24px;
+
+      overflow-y:
+        auto;
+
       max-height:
-        calc(100vh - 110px);
+        calc(
+          100vh - 110px
+        );
     }
 
     .syx-admin-section {
-      margin-bottom: 28px;
-      padding-bottom: 24px;
+      margin-bottom:
+        28px;
+
+      padding-bottom:
+        24px;
+
       border-bottom:
         1px solid
-        rgba(255,255,255,.08);
+        rgba(
+          255,
+          255,
+          255,
+          .08
+        );
     }
 
     .syx-admin-section-title {
-      color: #ff9e00;
-      font-size: 12px;
-      letter-spacing: .18em;
-      text-transform: uppercase;
-      margin-bottom: 18px;
+      color:
+        #ff9e00;
+
+      font-size:
+        12px;
+
+      letter-spacing:
+        .18em;
+
+      text-transform:
+        uppercase;
+
+      margin-bottom:
+        18px;
     }
 
     .syx-admin-section label {
-      display: block;
-      margin-bottom: 15px;
+      display:
+        block;
+
+      margin-bottom:
+        15px;
+
       color:
-        rgba(255,255,255,.55);
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: .08em;
+        rgba(
+          255,
+          255,
+          255,
+          .55
+        );
+
+      font-size:
+        11px;
+
+      text-transform:
+        uppercase;
+
+      letter-spacing:
+        .08em;
     }
 
     .syx-admin-section input,
     .syx-admin-section textarea {
-      display: block;
-      box-sizing: border-box;
-      width: 100%;
-      margin-top: 7px;
-      padding: 11px 12px;
+      display:
+        block;
+
+      box-sizing:
+        border-box;
+
+      width:
+        100%;
+
+      margin-top:
+        7px;
+
+      padding:
+        11px 12px;
+
       border:
         1px solid
-        rgba(255,255,255,.12);
-      outline: none;
-      background: #151518;
-      color: white;
-      font: inherit;
-      font-size: 13px;
+        rgba(
+          255,
+          255,
+          255,
+          .12
+        );
+
+      outline:
+        none;
+
+      background:
+        #151518;
+
+      color:
+        white;
+
+      font:
+        inherit;
+
+      font-size:
+        13px;
     }
 
     .syx-admin-section textarea {
-      resize: vertical;
-      min-height: 80px;
+      resize:
+        vertical;
+
+      min-height:
+        80px;
     }
 
     .syx-admin-section input:focus,
     .syx-admin-section textarea:focus {
-      border-color: #ff9e00;
+      border-color:
+        #ff9e00;
     }
 
     .syx-admin-actions {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
+      display:
+        flex;
+
+      gap:
+        10px;
+
+      flex-wrap:
+        wrap;
     }
 
     .syx-admin-actions button {
-      border: 1px solid;
-      padding: 13px 18px;
-      cursor: pointer;
-      font: inherit;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      font-size: 11px;
+      border:
+        1px solid;
+
+      padding:
+        13px 18px;
+
+      cursor:
+        pointer;
+
+      font:
+        inherit;
+
+      text-transform:
+        uppercase;
+
+      letter-spacing:
+        .08em;
+
+      font-size:
+        11px;
     }
 
     .syx-admin-save {
       border-color:
         #ff9e00 !important;
-      background: #ff9e00;
-      color: #0a0a0b;
+
+      background:
+        #ff9e00;
+
+      color:
+        #0a0a0b;
     }
 
     .syx-admin-save:hover {
-      background: #ffb133;
+      background:
+        #ffb133;
     }
 
     .syx-admin-save:disabled {
-      opacity: .6;
-      cursor: wait;
+      opacity:
+        .6;
+
+      cursor:
+        wait;
     }
 
     .syx-admin-secondary {
       border-color:
-        rgba(255,255,255,.15);
-      background: transparent;
+        rgba(
+          255,
+          255,
+          255,
+          .15
+        );
+
+      background:
+        transparent;
+
       color:
-        rgba(255,255,255,.65);
+        rgba(
+          255,
+          255,
+          255,
+          .65
+        );
     }
 
     .syx-admin-secondary:hover {
-      color: white;
+      color:
+        white;
+
       border-color:
-        rgba(255,255,255,.4);
+        rgba(
+          255,
+          255,
+          255,
+          .4
+        );
     }
 
     .syx-admin-status {
-      min-height: 20px;
-      margin-top: 14px;
-      font-size: 11px;
+      min-height:
+        20px;
+
+      margin-top:
+        14px;
+
+      font-size:
+        11px;
     }
 
     .syx-admin-status.success {
-      color: #00f5ff;
+      color:
+        #00f5ff;
     }
 
     .syx-admin-status.error {
-      color: #ff5c5c;
+      color:
+        #ff5c5c;
     }
   `;
+
 
   document.head.appendChild(
     style
@@ -1795,57 +2371,10 @@ function injectAdminStyles() {
 
 document.addEventListener(
   'DOMContentLoaded',
-  async () => {
+  () => {
 
-    /*
-     * Load both major pieces of
-     * dynamic site content before
-     * removing the loading screen.
-     */
-    await Promise.all([
-      loadSiteSettings(),
-      loadShowcase()
-    ]);
+    loadSiteSettings();
+    loadShowcase();
 
-    /*
-     * Give the browser one frame to
-     * render the loaded content before
-     * fading out the loading screen.
-     */
-    requestAnimationFrame(() => {
-
-      requestAnimationFrame(() => {
-
-        if (
-          typeof window.syxHideLoadingScreen ===
-          'function'
-        ) {
-          window.syxHideLoadingScreen();
-        }
-
-      });
-
-    });
   }
 );
-
-
-// ==========================================
-// LOADING SCREEN SAFETY FALLBACK
-// ==========================================
-
-/*
- * If an API ever hangs or the site has
- * another unexpected loading problem, do
- * not leave visitors stuck forever.
- */
-window.setTimeout(() => {
-
-  if (
-    typeof window.syxHideLoadingScreen ===
-    'function'
-  ) {
-    window.syxHideLoadingScreen();
-  }
-
-}, 10000);
