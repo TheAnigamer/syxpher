@@ -8,4 +8,4 @@ directory = "./public"
 [[d1_databases]]
 binding = "DB"
 database_name = "site-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "544b1188-eaa7-4302-abec-d8ecca1afb9e"
