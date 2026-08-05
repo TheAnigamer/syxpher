@@ -1,0 +1,43 @@
+html { scroll-behavior: smooth; }
+body { margin: 0; }
+#stream, #archive, #contact { scroll-margin-top: 1rem; }
+a:focus-visible, button:focus-visible { outline: 2px solid #FF9E00; outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* Geometry Dash levels table refinements */
+.gd-level-table {
+  table-layout: auto;
+}
+
+.gd-level-table thead th {
+  white-space: nowrap;
+}
+
+.gd-level-table tbody td {
+  vertical-align: middle;
+}
+
+.gd-level-table .author-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gd-level-table .author-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  .gd-level-table {
+    min-width: 900px;
+  }
+}
