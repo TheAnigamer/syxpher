@@ -1,4 +1,241 @@
 // ==========================================
+// SYXPHER SITE.JS
+// ==========================================
+
+
+// ==========================================
+// LOADING SCREEN
+// ==========================================
+
+(() => {
+  const loadingStart = performance.now();
+
+  const MIN_LOADING_TIME = 1500;
+  const FADE_DURATION = 700;
+
+  function createLoadingScreen() {
+    if (document.getElementById("syx-loading-screen")) {
+      return;
+    }
+
+    const loading = document.createElement("div");
+
+    loading.id = "syx-loading-screen";
+
+    loading.innerHTML = `
+      <div class="syx-loading-inner">
+
+        <div class="syx-loading-logo">
+          SYXPHER
+        </div>
+
+        <div class="syx-loading-status">
+          INITIALIZING SYSTEM
+        </div>
+
+        <div class="syx-loading-bar">
+          <div class="syx-loading-progress"></div>
+        </div>
+
+        <div class="syx-loading-percent">
+          0%
+        </div>
+
+      </div>
+    `;
+
+    document.body.appendChild(loading);
+
+    injectLoadingStyles();
+
+    const progress =
+      loading.querySelector(
+        ".syx-loading-progress"
+      );
+
+    const percent =
+      loading.querySelector(
+        ".syx-loading-percent"
+      );
+
+    let currentProgress = 0;
+
+    const progressInterval =
+      window.setInterval(() => {
+
+        if (
+          currentProgress >= 90
+        ) {
+          window.clearInterval(
+            progressInterval
+          );
+
+          return;
+        }
+
+        currentProgress +=
+          Math.random() * 5 + 1;
+
+        if (
+          currentProgress > 90
+        ) {
+          currentProgress = 90;
+        }
+
+        progress.style.width =
+          `${currentProgress}%`;
+
+        percent.textContent =
+          `${Math.floor(currentProgress)}%`;
+
+      }, 80);
+  }
+
+
+  function finishLoadingScreen() {
+    const loading =
+      document.getElementById(
+        "syx-loading-screen"
+      );
+
+    if (!loading) return;
+
+    const elapsed =
+      performance.now() -
+      loadingStart;
+
+    const remaining =
+      Math.max(
+        0,
+        MIN_LOADING_TIME - elapsed
+      );
+
+    window.setTimeout(() => {
+
+      const progress =
+        loading.querySelector(
+          ".syx-loading-progress"
+        );
+
+      const percent =
+        loading.querySelector(
+          ".syx-loading-percent"
+        );
+
+      if (progress) {
+        progress.style.width =
+          "100%";
+      }
+
+      if (percent) {
+        percent.textContent =
+          "100%";
+      }
+
+      loading.classList.add(
+        "complete"
+      );
+
+      window.setTimeout(() => {
+        loading.remove();
+      }, FADE_DURATION);
+
+    }, remaining);
+  }
+
+
+  function injectLoadingStyles() {
+    if (
+      document.getElementById(
+        "syx-loading-styles"
+      )
+    ) {
+      return;
+    }
+
+    const style =
+      document.createElement("style");
+
+    style.id =
+      "syx-loading-styles";
+
+    style.textContent = `
+      #syx-loading-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 100000;
+        background: #0a0a0b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: monospace;
+        transition: opacity 0.7s ease, visibility 0.7s ease;
+      }
+
+      #syx-loading-screen.complete {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .syx-loading-inner {
+        width: min(320px, calc(100vw - 40px));
+        text-align: center;
+      }
+
+      .syx-loading-logo {
+        color: white;
+        font-family: sans-serif;
+        font-weight: 700;
+        font-size: 24px;
+        letter-spacing: 0.25em;
+        margin-bottom: 8px;
+      }
+
+      .syx-loading-status {
+        color: #00f5ff;
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        margin-bottom: 24px;
+      }
+
+      .syx-loading-bar {
+        width: 100%;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.1);
+        overflow: hidden;
+        position: relative;
+        margin-bottom: 12px;
+      }
+
+      .syx-loading-progress {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 0%;
+        background: #ff9e00;
+        transition: width 0.1s linear;
+      }
+
+      .syx-loading-percent {
+        color: rgba(255, 255, 255, 0.4);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  createLoadingScreen();
+
+  window.addEventListener("load", () => {
+    finishLoadingScreen();
+  });
+})();
+
+
+// ==========================================
 // UTC CLOCK
 // ==========================================
 
