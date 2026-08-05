@@ -30,6 +30,7 @@ async function verifyTOTP(secret, code) {
 
   for (const offset of [-1, 0, 1]) {
     const current = counter + offset;
+
     const buffer = new ArrayBuffer(8);
     const view = new DataView(buffer);
 
@@ -77,10 +78,14 @@ async function createAdminToken(env) {
   );
 
   const encoded = btoa(
-    String.fromCharCode(...new TextEncoder().encode(payload))
+    String.fromCharCode(
+      ...new TextEncoder().encode(payload)
+    )
   );
 
-  const sig = btoa(String.fromCharCode(...signature));
+  const sig = btoa(
+    String.fromCharCode(...signature)
+  );
 
   return `${encoded}.${sig}`;
 }
@@ -92,7 +97,10 @@ async function verifyAdminToken(token, env) {
     const [encoded, sig] = token.split(".");
 
     const payload = new TextDecoder().decode(
-      Uint8Array.from(atob(encoded), c => c.charCodeAt(0))
+      Uint8Array.from(
+        atob(encoded),
+        c => c.charCodeAt(0)
+      )
     );
 
     const [role, expires] = payload.split(":");
@@ -146,22 +154,52 @@ function json(data, status = 200) {
 }
 
 async function requireAdmin(request, env) {
-  const auth = request.headers.get("Authorization") || "";
+  const auth =
+    request.headers.get("Authorization") || "";
 
   if (!auth.startsWith("Bearer ")) {
     return false;
   }
 
-  return verifyAdminToken(auth.slice(7), env);
+  return verifyAdminToken(
+    auth.slice(7),
+    env
+  );
 }
+
+
+// ==========================================
+// SITE SETTINGS
+// ==========================================
+
+async function getSiteSettings(env) {
+  const { results } = await env.DB.prepare(
+    `SELECT key, value
+     FROM site_settings
+     ORDER BY key`
+  ).all();
+
+  const settings = {};
+
+  for (const row of results || []) {
+    settings[row.key] = row.value;
+  }
+
+  return settings;
+}
+
+
+// ==========================================
+// WORKER
+// ==========================================
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // ==========================================
+    // ========================================
     // ADMIN LOGIN
-    // ==========================================
+    // ========================================
 
     if (
       url.pathname === "/api/verify" &&
@@ -184,7 +222,8 @@ export default {
           return json({ ok: false });
         }
 
-        const token = await createAdminToken(env);
+        const token =
+          await createAdminToken(env);
 
         return json({
           ok: true,
@@ -192,41 +231,176 @@ export default {
         });
       } catch (error) {
         console.error(error);
-        return json({ ok: false }, 500);
+
+        return json(
+          { ok: false },
+          500
+        );
       }
     }
 
-    // ==========================================
-    // PUBLIC SHOWCASE
-    // ==========================================
+
+    // ========================================
+    // PUBLIC SITE SETTINGS
+    // ========================================
 
     if (
-      url.pathname === "/api/showcase" &&
+      url.pathname === "/api/site-settings" &&
       request.method === "GET"
     ) {
       try {
-        const { results } = await env.DB.prepare(
-          `SELECT id, title, category, description, image, link, sort_order
-           FROM showcase_items
-           ORDER BY sort_order ASC, id ASC`
-        ).all();
+        const settings =
+          await getSiteSettings(env);
 
-        return json(results);
+        return json(settings);
       } catch (error) {
         console.error(error);
 
         return json(
           {
-            error: "Could not load showcase items"
+            error: "Could not load site settings"
           },
           500
         );
       }
     }
 
-    // ==========================================
-    // ADMIN: LOAD SHOWCASE
-    // ==========================================
+
+    // ========================================
+    // ADMIN SITE SETTINGS
+    // ========================================
+
+    if (
+      url.pathname === "/api/admin/site-settings" &&
+      request.method === "GET"
+    ) {
+      if (!(await requireAdmin(request, env))) {
+        return json(
+          { error: "Unauthorized" },
+          401
+        );
+      }
+
+      try {
+        const settings =
+          await getSiteSettings(env);
+
+        return json(settings);
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          {
+            error: "Could not load settings"
+          },
+          500
+        );
+      }
+    }
+
+
+    if (
+      url.pathname === "/api/admin/site-settings" &&
+      request.method === "PUT"
+    ) {
+      if (!(await requireAdmin(request, env))) {
+        return json(
+          { error: "Unauthorized" },
+          401
+        );
+      }
+
+      try {
+        const body = await request.json();
+
+        if (
+          !body ||
+          typeof body !== "object" ||
+          Array.isArray(body)
+        ) {
+          return json(
+            { error: "Invalid settings" },
+            400
+          );
+        }
+
+        const entries =
+          Object.entries(body);
+
+        const statements = entries.map(
+          ([key, value]) => {
+            return env.DB.prepare(
+              `INSERT INTO site_settings
+               (key, value)
+               VALUES (?, ?)
+               ON CONFLICT(key)
+               DO UPDATE SET value = excluded.value`
+            ).bind(
+              String(key),
+              String(value ?? "")
+            );
+          }
+        );
+
+        if (statements.length) {
+          await env.DB.batch(statements);
+        }
+
+        return json({
+          ok: true
+        });
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          {
+            error: "Could not save settings"
+          },
+          500
+        );
+      }
+    }
+
+
+    // ========================================
+    // PUBLIC SHOWCASE
+    // ========================================
+
+    if (
+      url.pathname === "/api/showcase" &&
+      request.method === "GET"
+    ) {
+      try {
+        const { results } =
+          await env.DB.prepare(
+            `SELECT id,
+                    title,
+                    category,
+                    description,
+                    image,
+                    link,
+                    sort_order
+             FROM showcase_items
+             ORDER BY sort_order ASC, id ASC`
+          ).all();
+
+        return json(results || []);
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          {
+            error: "Could not load showcase"
+          },
+          500
+        );
+      }
+    }
+
+
+    // ========================================
+    // ADMIN SHOWCASE GET
+    // ========================================
 
     if (
       url.pathname === "/api/admin/showcase" &&
@@ -239,18 +413,26 @@ export default {
         );
       }
 
-      const { results } = await env.DB.prepare(
-        `SELECT id, title, category, description, image, link, sort_order
-         FROM showcase_items
-         ORDER BY sort_order ASC, id ASC`
-      ).all();
+      const { results } =
+        await env.DB.prepare(
+          `SELECT id,
+                  title,
+                  category,
+                  description,
+                  image,
+                  link,
+                  sort_order
+           FROM showcase_items
+           ORDER BY sort_order ASC, id ASC`
+        ).all();
 
-      return json(results);
+      return json(results || []);
     }
 
-    // ==========================================
-    // ADMIN: ADD SHOWCASE ITEM
-    // ==========================================
+
+    // ========================================
+    // ADD SHOWCASE ITEM
+    // ========================================
 
     if (
       url.pathname === "/api/admin/showcase" &&
@@ -264,37 +446,51 @@ export default {
       }
 
       try {
-        const body = await request.json();
+        const body =
+          await request.json();
 
         if (!body.title) {
           return json(
-            { error: "Title is required" },
+            {
+              error: "Title is required"
+            },
             400
           );
         }
 
-        const max = await env.DB.prepare(
-          `SELECT COALESCE(MAX(sort_order), 0) AS max_order
-           FROM showcase_items`
-        ).first();
+        const max =
+          await env.DB.prepare(
+            `SELECT COALESCE(
+              MAX(sort_order), 0
+            ) AS max_order
+             FROM showcase_items`
+          ).first();
 
         const sortOrder =
           Number(max?.max_order || 0) + 1;
 
-        const result = await env.DB.prepare(
-          `INSERT INTO showcase_items
-           (title, category, description, image, link, sort_order)
-           VALUES (?, ?, ?, ?, ?, ?)`
-        )
-          .bind(
-            body.title,
-            body.category || "",
-            body.description || "",
-            body.image || "",
-            body.link || "",
-            sortOrder
+        const result =
+          await env.DB.prepare(
+            `INSERT INTO showcase_items
+             (
+               title,
+               category,
+               description,
+               image,
+               link,
+               sort_order
+             )
+             VALUES (?, ?, ?, ?, ?, ?)`
           )
-          .run();
+            .bind(
+              body.title,
+              body.category || "",
+              body.description || "",
+              body.image || "",
+              body.link || "",
+              sortOrder
+            )
+            .run();
 
         return json({
           ok: true,
@@ -304,18 +500,23 @@ export default {
         console.error(error);
 
         return json(
-          { error: "Could not create showcase item" },
+          {
+            error: "Could not create item"
+          },
           500
         );
       }
     }
 
-    // ==========================================
-    // ADMIN: EDIT SHOWCASE ITEM
-    // ==========================================
+
+    // ========================================
+    // EDIT SHOWCASE ITEM
+    // ========================================
 
     if (
-      url.pathname.startsWith("/api/admin/showcase/") &&
+      url.pathname.startsWith(
+        "/api/admin/showcase/"
+      ) &&
       request.method === "PUT"
     ) {
       if (!(await requireAdmin(request, env))) {
@@ -326,8 +527,11 @@ export default {
       }
 
       try {
-        const id = url.pathname.split("/").pop();
-        const body = await request.json();
+        const id =
+          url.pathname.split("/").pop();
+
+        const body =
+          await request.json();
 
         await env.DB.prepare(
           `UPDATE showcase_items
@@ -355,18 +559,23 @@ export default {
         console.error(error);
 
         return json(
-          { error: "Could not update showcase item" },
+          {
+            error: "Could not update item"
+          },
           500
         );
       }
     }
 
-    // ==========================================
-    // ADMIN: DELETE SHOWCASE ITEM
-    // ==========================================
+
+    // ========================================
+    // DELETE SHOWCASE ITEM
+    // ========================================
 
     if (
-      url.pathname.startsWith("/api/admin/showcase/") &&
+      url.pathname.startsWith(
+        "/api/admin/showcase/"
+      ) &&
       request.method === "DELETE"
     ) {
       if (!(await requireAdmin(request, env))) {
@@ -377,7 +586,8 @@ export default {
       }
 
       try {
-        const id = url.pathname.split("/").pop();
+        const id =
+          url.pathname.split("/").pop();
 
         await env.DB.prepare(
           `DELETE FROM showcase_items
@@ -393,18 +603,22 @@ export default {
         console.error(error);
 
         return json(
-          { error: "Could not delete showcase item" },
+          {
+            error: "Could not delete item"
+          },
           500
         );
       }
     }
 
-    // ==========================================
-    // ADMIN: REORDER SHOWCASE ITEMS
-    // ==========================================
+
+    // ========================================
+    // REORDER SHOWCASE
+    // ========================================
 
     if (
-      url.pathname === "/api/admin/showcase/reorder" &&
+      url.pathname ===
+        "/api/admin/showcase/reorder" &&
       request.method === "POST"
     ) {
       if (!(await requireAdmin(request, env))) {
@@ -415,25 +629,36 @@ export default {
       }
 
       try {
-        const body = await request.json();
+        const body =
+          await request.json();
 
         if (!Array.isArray(body.ids)) {
           return json(
-            { error: "Invalid order" },
+            {
+              error: "Invalid order"
+            },
             400
           );
         }
 
-        const statements = body.ids.map(
-          (id, index) =>
-            env.DB.prepare(
-              `UPDATE showcase_items
-               SET sort_order = ?
-               WHERE id = ?`
-            ).bind(index + 1, id)
-        );
+        const statements =
+          body.ids.map(
+            (id, index) =>
+              env.DB.prepare(
+                `UPDATE showcase_items
+                 SET sort_order = ?
+                 WHERE id = ?`
+              ).bind(
+                index + 1,
+                id
+              )
+          );
 
-        await env.DB.batch(statements);
+        if (statements.length) {
+          await env.DB.batch(
+            statements
+          );
+        }
 
         return json({
           ok: true
@@ -442,54 +667,72 @@ export default {
         console.error(error);
 
         return json(
-          { error: "Could not reorder showcase items" },
-          500
-        );
-      }
-    }
-
-    // ==========================================
-    // GEOMETRY DASH LEVELS
-    // ==========================================
-
-    if (url.pathname === "/api/levels") {
-      try {
-        const response = await fetch(
-          "https://gd-sync-308073055710.us-south1.run.app/?mode=curated",
           {
-            headers: {
-              Accept: "application/json"
-            }
-          }
-        );
-
-        return new Response(response.body, {
-          status: response.status,
-          headers: {
-            "Content-Type":
-              response.headers.get("Content-Type") ||
-              "application/json",
-            "Cache-Control": "no-store"
-          }
-        });
-      } catch (error) {
-        console.error(error);
-
-        return json(
-          {
-            error: "Unable to load levels right now."
+            error: "Could not reorder items"
           },
           500
         );
       }
     }
 
-    // ==========================================
+
+    // ========================================
+    // GEOMETRY DASH LEVELS
+    // ========================================
+
+    if (
+      url.pathname === "/api/levels"
+    ) {
+      try {
+        const response =
+          await fetch(
+            "https://gd-sync-308073055710.us-south1.run.app/?mode=curated",
+            {
+              headers: {
+                Accept:
+                  "application/json"
+              }
+            }
+          );
+
+        return new Response(
+          response.body,
+          {
+            status:
+              response.status,
+            headers: {
+              "Content-Type":
+                response.headers.get(
+                  "Content-Type"
+                ) ||
+                "application/json",
+              "Cache-Control":
+                "no-store"
+            }
+          }
+        );
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          {
+            error:
+              "Geometry Dash API unavailable"
+          },
+          502
+        );
+      }
+    }
+
+
+    // ========================================
     // STATIC SITE
-    // ==========================================
+    // ========================================
 
     if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
+      return env.ASSETS.fetch(
+        request
+      );
     }
 
     return new Response(
