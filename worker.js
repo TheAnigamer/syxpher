@@ -58,7 +58,6 @@ async function verifyTOTP(secret, code) {
 
 async function createAdminToken(env) {
   const expires = Date.now() + 30 * 60 * 1000;
-
   const payload = `admin:${expires}`;
 
   const key = await crypto.subtle.importKey(
@@ -160,8 +159,14 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // Admin login
-    if (url.pathname === "/api/verify" && request.method === "POST") {
+    // ==========================================
+    // ADMIN LOGIN
+    // ==========================================
+
+    if (
+      url.pathname === "/api/verify" &&
+      request.method === "POST"
+    ) {
       try {
         const body = await request.json();
         const code = String(body.code || "");
@@ -170,7 +175,10 @@ export default {
           return json({ ok: false }, 400);
         }
 
-        const valid = await verifyTOTP(env.TOTP_SECRET, code);
+        const valid = await verifyTOTP(
+          env.TOTP_SECRET,
+          code
+        );
 
         if (!valid) {
           return json({ ok: false });
@@ -188,13 +196,47 @@ export default {
       }
     }
 
-    // Load showcase items
+    // ==========================================
+    // PUBLIC SHOWCASE
+    // ==========================================
+
+    if (
+      url.pathname === "/api/showcase" &&
+      request.method === "GET"
+    ) {
+      try {
+        const { results } = await env.DB.prepare(
+          `SELECT id, title, category, description, image, link, sort_order
+           FROM showcase_items
+           ORDER BY sort_order ASC, id ASC`
+        ).all();
+
+        return json(results);
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          {
+            error: "Could not load showcase items"
+          },
+          500
+        );
+      }
+    }
+
+    // ==========================================
+    // ADMIN: LOAD SHOWCASE
+    // ==========================================
+
     if (
       url.pathname === "/api/admin/showcase" &&
       request.method === "GET"
     ) {
       if (!(await requireAdmin(request, env))) {
-        return json({ error: "Unauthorized" }, 401);
+        return json(
+          { error: "Unauthorized" },
+          401
+        );
       }
 
       const { results } = await env.DB.prepare(
@@ -206,160 +248,255 @@ export default {
       return json(results);
     }
 
-    // Add showcase item
+    // ==========================================
+    // ADMIN: ADD SHOWCASE ITEM
+    // ==========================================
+
     if (
       url.pathname === "/api/admin/showcase" &&
       request.method === "POST"
     ) {
       if (!(await requireAdmin(request, env))) {
-        return json({ error: "Unauthorized" }, 401);
+        return json(
+          { error: "Unauthorized" },
+          401
+        );
       }
 
-      const body = await request.json();
+      try {
+        const body = await request.json();
 
-      if (!body.title) {
-        return json({ error: "Title is required" }, 400);
-      }
+        if (!body.title) {
+          return json(
+            { error: "Title is required" },
+            400
+          );
+        }
 
-      const max = await env.DB.prepare(
-        `SELECT COALESCE(MAX(sort_order), 0) AS max_order
-         FROM showcase_items`
-      ).first();
+        const max = await env.DB.prepare(
+          `SELECT COALESCE(MAX(sort_order), 0) AS max_order
+           FROM showcase_items`
+        ).first();
 
-      const sortOrder = Number(max?.max_order || 0) + 1;
+        const sortOrder =
+          Number(max?.max_order || 0) + 1;
 
-      const result = await env.DB.prepare(
-        `INSERT INTO showcase_items
-         (title, category, description, image, link, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      )
-        .bind(
-          body.title,
-          body.category || "",
-          body.description || "",
-          body.image || "",
-          body.link || "",
-          sortOrder
+        const result = await env.DB.prepare(
+          `INSERT INTO showcase_items
+           (title, category, description, image, link, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?)`
         )
-        .run();
+          .bind(
+            body.title,
+            body.category || "",
+            body.description || "",
+            body.image || "",
+            body.link || "",
+            sortOrder
+          )
+          .run();
 
-      return json({
-        ok: true,
-        id: result.meta.last_row_id
-      });
+        return json({
+          ok: true,
+          id: result.meta.last_row_id
+        });
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          { error: "Could not create showcase item" },
+          500
+        );
+      }
     }
 
-    // Edit showcase item
+    // ==========================================
+    // ADMIN: EDIT SHOWCASE ITEM
+    // ==========================================
+
     if (
       url.pathname.startsWith("/api/admin/showcase/") &&
       request.method === "PUT"
     ) {
       if (!(await requireAdmin(request, env))) {
-        return json({ error: "Unauthorized" }, 401);
+        return json(
+          { error: "Unauthorized" },
+          401
+        );
       }
 
-      const id = url.pathname.split("/").pop();
-      const body = await request.json();
+      try {
+        const id = url.pathname.split("/").pop();
+        const body = await request.json();
 
-      await env.DB.prepare(
-        `UPDATE showcase_items
-         SET title = ?,
-             category = ?,
-             description = ?,
-             image = ?,
-             link = ?
-         WHERE id = ?`
-      )
-        .bind(
-          body.title || "",
-          body.category || "",
-          body.description || "",
-          body.image || "",
-          body.link || "",
-          id
+        await env.DB.prepare(
+          `UPDATE showcase_items
+           SET title = ?,
+               category = ?,
+               description = ?,
+               image = ?,
+               link = ?
+           WHERE id = ?`
         )
-        .run();
+          .bind(
+            body.title || "",
+            body.category || "",
+            body.description || "",
+            body.image || "",
+            body.link || "",
+            id
+          )
+          .run();
 
-      return json({ ok: true });
+        return json({
+          ok: true
+        });
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          { error: "Could not update showcase item" },
+          500
+        );
+      }
     }
 
-    // Delete showcase item
+    // ==========================================
+    // ADMIN: DELETE SHOWCASE ITEM
+    // ==========================================
+
     if (
       url.pathname.startsWith("/api/admin/showcase/") &&
       request.method === "DELETE"
     ) {
       if (!(await requireAdmin(request, env))) {
-        return json({ error: "Unauthorized" }, 401);
+        return json(
+          { error: "Unauthorized" },
+          401
+        );
       }
 
-      const id = url.pathname.split("/").pop();
+      try {
+        const id = url.pathname.split("/").pop();
 
-      await env.DB.prepare(
-        `DELETE FROM showcase_items WHERE id = ?`
-      )
-        .bind(id)
-        .run();
+        await env.DB.prepare(
+          `DELETE FROM showcase_items
+           WHERE id = ?`
+        )
+          .bind(id)
+          .run();
 
-      return json({ ok: true });
+        return json({
+          ok: true
+        });
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          { error: "Could not delete showcase item" },
+          500
+        );
+      }
     }
 
-    // Reorder showcase items
+    // ==========================================
+    // ADMIN: REORDER SHOWCASE ITEMS
+    // ==========================================
+
     if (
       url.pathname === "/api/admin/showcase/reorder" &&
       request.method === "POST"
     ) {
       if (!(await requireAdmin(request, env))) {
-        return json({ error: "Unauthorized" }, 401);
+        return json(
+          { error: "Unauthorized" },
+          401
+        );
       }
 
-      const body = await request.json();
+      try {
+        const body = await request.json();
 
-      if (!Array.isArray(body.ids)) {
-        return json({ error: "Invalid order" }, 400);
+        if (!Array.isArray(body.ids)) {
+          return json(
+            { error: "Invalid order" },
+            400
+          );
+        }
+
+        const statements = body.ids.map(
+          (id, index) =>
+            env.DB.prepare(
+              `UPDATE showcase_items
+               SET sort_order = ?
+               WHERE id = ?`
+            ).bind(index + 1, id)
+        );
+
+        await env.DB.batch(statements);
+
+        return json({
+          ok: true
+        });
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          { error: "Could not reorder showcase items" },
+          500
+        );
       }
-
-      const statements = body.ids.map((id, index) =>
-        env.DB.prepare(
-          `UPDATE showcase_items
-           SET sort_order = ?
-           WHERE id = ?`
-        ).bind(index + 1, id)
-      );
-
-      await env.DB.batch(statements);
-
-      return json({ ok: true });
     }
 
-    // Geometry Dash levels
+    // ==========================================
+    // GEOMETRY DASH LEVELS
+    // ==========================================
+
     if (url.pathname === "/api/levels") {
-      const response = await fetch(
-        "https://gd-sync-308073055710.us-south1.run.app/?mode=curated",
-        {
-          headers: {
-            Accept: "application/json"
+      try {
+        const response = await fetch(
+          "https://gd-sync-308073055710.us-south1.run.app/?mode=curated",
+          {
+            headers: {
+              Accept: "application/json"
+            }
           }
-        }
-      );
+        );
 
-      return new Response(response.body, {
-        status: response.status,
-        headers: {
-          "Content-Type":
-            response.headers.get("Content-Type") ||
-            "application/json",
-          "Cache-Control": "no-store"
-        }
-      });
+        return new Response(response.body, {
+          status: response.status,
+          headers: {
+            "Content-Type":
+              response.headers.get("Content-Type") ||
+              "application/json",
+            "Cache-Control": "no-store"
+          }
+        });
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          {
+            error: "Unable to load levels right now."
+          },
+          500
+        );
+      }
     }
 
-    // Static site
+    // ==========================================
+    // STATIC SITE
+    // ==========================================
+
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
     }
 
-    return new Response("Site assets unavailable", {
-      status: 500
-    });
+    return new Response(
+      "Site assets unavailable",
+      {
+        status: 500
+      }
+    );
   }
 };
