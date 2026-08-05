@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS page_content (
+  id INTEGER PRIMARY KEY,
+  html TEXT NOT NULL
+);
