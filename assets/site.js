@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (!lock) return;
 
   lock.addEventListener("click", async () => {
-    const code = prompt("Enter your 6-digit Authenticator code:");
+    const code = prompt("Enter your 6-digit Google Authenticator code:");
 
     if (!code) return;
 
@@ -12,19 +12,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch("/api/verify", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code })
       });
 
       const result = await response.json();
 
       if (result.ok) {
         sessionStorage.setItem("adminAuthenticated", "true");
-
         lock.textContent = "🔓";
         lock.title = "Admin Mode Enabled";
-
         alert("Admin mode enabled.");
       } else {
         alert("Invalid Authenticator code.");
