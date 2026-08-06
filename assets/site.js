@@ -973,7 +973,7 @@ function renderPublicShowcase(items) {
 
     article.className = `syx-showcase-card group relative w-full overflow-hidden cursor-pointer bg-[#111] transition-all duration-500 ease-in-out transform opacity-100 ${
       currentLayoutMode === 'grid' 
-        ? 'aspect-square md:aspect-[4/3]' 
+        ? 'aspect-video' 
         : 'aspect-[16/9] md:aspect-[21/9]'
     }`;
 
@@ -995,30 +995,42 @@ function renderPublicShowcase(items) {
         <div class="absolute -inset-20 bg-[#FF9E00]/10 blur-[80px]"></div>
       </div>
 
-      <span class="absolute top-4 left-4 md:top-6 md:left-6 font-mono-tech text-xs text-white/30">
+      <span class="absolute top-2 left-2 md:top-3 md:left-3 font-mono-tech text-[10px] md:text-xs text-white/30">
         ${String(index + 1).padStart(2, '0')}
       </span>
 
-      <div class="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 md:w-12 md:h-12 flex items-center justify-center border border-white/20 rounded-full text-white/60 group-hover:border-[#FF9E00] group-hover:text-[#FF9E00] transition-colors">
-        <svg class="lucide lucide-play w-4 h-4 md:w-5 md:h-5" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+      <div class="absolute top-2 right-2 md:top-3 md:right-3 ${
+        currentLayoutMode === 'grid' ? 'w-7 h-7 md:w-8 md:h-8' : 'w-10 h-10 md:w-12 md:h-12'
+      } flex items-center justify-center border border-white/20 rounded-full text-white/60 group-hover:border-[#FF9E00] group-hover:text-[#FF9E00] transition-colors">
+        <svg class="lucide lucide-play ${
+          currentLayoutMode === 'grid' ? 'w-3 h-3' : 'w-4 h-4 md:w-5 md:h-5'
+        }" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
           <polygon points="6 3 20 12 6 21 6 3"></polygon>
         </svg>
       </div>
 
-      <div class="absolute bottom-0 left-0 right-0 p-4 md:p-8">
+      <div class="absolute bottom-0 left-0 right-0 ${
+        currentLayoutMode === 'grid' ? 'p-3 md:p-4' : 'p-4 md:p-8'
+      }">
         <div class="overflow-hidden">
-          <span class="font-mono-tech text-xs uppercase tracking-widest text-[#FF9E00] block mb-1">
+          <span class="font-mono-tech text-[10px] md:text-xs uppercase tracking-widest text-[#FF9E00] block mb-0.5">
             ${escapeHtml(category)}
           </span>
         </div>
 
-        <h3 class="font-heading font-bold text-2xl md:text-4xl text-white tracking-tight">
+        <h3 class="font-heading font-bold ${
+          currentLayoutMode === 'grid' ? 'text-base md:text-lg line-clamp-1' : 'text-2xl md:text-4xl'
+        } text-white tracking-tight">
           ${escapeHtml(title)}
         </h3>
 
-        <p class="text-white/40 mt-1 max-w-lg text-xs md:text-sm line-clamp-2 group-hover:line-clamp-none transition-all">
-          ${escapeHtml(description)}
-        </p>
+        ${
+          currentLayoutMode === 'list'
+            ? `<p class="text-white/40 mt-1 max-w-lg text-xs md:text-sm line-clamp-2 group-hover:line-clamp-none transition-all">
+                ${escapeHtml(description)}
+              </p>`
+            : ''
+        }
       </div>
     `;
 
@@ -1036,7 +1048,7 @@ function renderPublicShowcase(items) {
 
 function applyLayoutContainerStyles(container, mode) {
   if (mode === 'grid') {
-    container.className = 'syx-showcase-container grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 transition-all duration-500 ease-in-out opacity-100';
+    container.className = 'syx-showcase-container grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 transition-all duration-500 ease-in-out opacity-100';
   } else {
     container.className = 'syx-showcase-container flex flex-col gap-1 md:gap-2 transition-all duration-500 ease-in-out opacity-100';
   }
@@ -1046,7 +1058,6 @@ function setPublicShowcaseLayout(mode) {
   if (currentLayoutMode === mode) return;
   currentLayoutMode = mode;
 
-  const container = document.querySelector('.syx-showcase-container');
   const btnList = document.getElementById('view-mode-list');
   const btnGrid = document.getElementById('view-mode-grid');
 
@@ -1060,28 +1071,8 @@ function setPublicShowcaseLayout(mode) {
     btnGrid.classList.toggle('border-[#FF9E00]', mode === 'grid');
   }
 
-  if (container) {
-    container.style.opacity = '0';
-    container.style.transform = 'translateY(10px)';
-
-    setTimeout(() => {
-      applyLayoutContainerStyles(container, mode);
-
-      const articles = container.querySelectorAll('.syx-showcase-card');
-      articles.forEach(article => {
-        if (mode === 'grid') {
-          article.classList.remove('aspect-[16/9]', 'md:aspect-[21/9]');
-          article.classList.add('aspect-square', 'md:aspect-[4/3]');
-        } else {
-          article.classList.remove('aspect-square', 'md:aspect-[4/3]');
-          article.classList.add('aspect-[16/9]', 'md:aspect-[21/9]');
-        }
-      });
-
-      container.style.opacity = '1';
-      container.style.transform = 'translateY(0px)';
-    }, 250);
-  }
+  // Re-render showcase items with layout styling adjustments
+  renderPublicShowcase(showcaseItems);
 }
 
 
