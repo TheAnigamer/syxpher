@@ -929,6 +929,16 @@ function renderPublicShowcase(
   items
 ) {
 
+  const worksCountEl =
+    document.getElementById(
+      'works-count'
+    );
+
+  if (worksCountEl) {
+    worksCountEl.textContent =
+      items ? items.length : 0;
+  }
+
   const stream =
     document.getElementById(
       'stream'
