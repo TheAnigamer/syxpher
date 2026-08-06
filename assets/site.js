@@ -236,7 +236,7 @@
 
 
 // ==========================================
-// UTC CLOCK
+// CLIENT TIMEZONE & LOCAL CLOCK
 // ==========================================
 
 (() => {
@@ -249,16 +249,22 @@
     const now = new Date();
 
     const time =
-      new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'UTC',
+      new Intl.DateTimeFormat('en-US', {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
         hour12: false
       }).format(now);
 
+    // Extract time zone name (e.g., CST, PST, EST, UTC)
+    const timeZoneName =
+      new Intl.DateTimeFormat('en-US', {
+        timeZoneName: 'short'
+      }).formatToParts(now)
+        .find(part => part.type === 'timeZoneName')?.value || 'LOCAL';
+
     clock.textContent =
-      `${time} · UTC`;
+      `${time} · ${timeZoneName}`;
   };
 
   updateClock();
