@@ -309,8 +309,6 @@ let siteSettings = {};
 
 let showcaseItems = [];
 
-let currentLayoutMode = 'list'; // 'list' (stream) or 'grid'
-
 
 // ==========================================
 // HTML ESCAPING
@@ -924,155 +922,161 @@ async function loadShowcase() {
 
 
 // ==========================================
-// RENDER PUBLIC SHOWCASE (GRID + STREAM TOGGLE)
+// RENDER PUBLIC SHOWCASE
 // ==========================================
 
-function renderPublicShowcase(items) {
-  const stream = document.getElementById('stream');
+function renderPublicShowcase(
+  items
+) {
+
+  const stream =
+    document.getElementById(
+      'stream'
+    );
+
   if (!stream) return;
 
-  const headerFlex = stream.querySelector('.px-6.md\\:px-12.mb-12.md\\:mb-16 > div');
+  const articles =
+    stream.querySelectorAll(
+      'article'
+    );
 
-  // Inject View Switcher Controls if missing
-  if (headerFlex && !document.getElementById('showcase-view-toggle')) {
-    const toggleContainer = document.createElement('div');
-    toggleContainer.id = 'showcase-view-toggle';
-    toggleContainer.className = 'flex items-center gap-2 mt-4 md:mt-0 font-mono-tech text-xs';
-    toggleContainer.innerHTML = `
-      <button id="view-mode-list" class="px-3 py-1.5 border border-white/20 text-white hover:border-[#FF9E00] transition-all duration-300 ${currentLayoutMode === 'list' ? 'bg-[#FF9E00] !text-[#0A0A0B] border-[#FF9E00]' : ''}">
-        LIST
-      </button>
-      <button id="view-mode-grid" class="px-3 py-1.5 border border-white/20 text-white hover:border-[#FF9E00] transition-all duration-300 ${currentLayoutMode === 'grid' ? 'bg-[#FF9E00] !text-[#0A0A0B] border-[#FF9E00]' : ''}">
-        GRID
-      </button>
-    `;
-    headerFlex.appendChild(toggleContainer);
+  if (!articles.length) {
+    console.warn(
+      'No showcase articles found.'
+    );
 
-    document.getElementById('view-mode-list').addEventListener('click', () => setPublicShowcaseLayout('list'));
-    document.getElementById('view-mode-grid').addEventListener('click', () => setPublicShowcaseLayout('grid'));
+    return;
   }
 
-  // Find target card container or transform current one
-  let container = stream.querySelector('.syx-showcase-container');
-  if (!container) {
-    const existingArticles = stream.querySelectorAll('article');
-    if (existingArticles.length) {
-      container = existingArticles[0].parentElement;
-      container.classList.add('syx-showcase-container', 'transition-all', 'duration-500', 'ease-in-out');
-    }
-  }
+  const container =
+    articles[0].parentElement;
 
   if (!container) return;
+
   container.innerHTML = '';
 
-  // Apply wrapper styling for mode
-  applyLayoutContainerStyles(container, currentLayoutMode);
+  items.forEach(
+    (item, index) => {
 
-  items.forEach((item, index) => {
-    const article = document.createElement('article');
+      const article =
+        document.createElement(
+          'article'
+        );
 
-    article.className = `syx-showcase-card group relative w-full overflow-hidden cursor-pointer bg-[#111] transition-all duration-500 ease-in-out transform opacity-100 ${
-      currentLayoutMode === 'grid' 
-        ? 'aspect-video' 
-        : 'aspect-[16/9] md:aspect-[21/9]'
-    }`;
+      article.className =
+        'group relative w-full aspect-[16/9] md:aspect-[21/9] overflow-hidden cursor-pointer bg-[#111]';
 
-    const image = item.image || './assets/embedded-image-2.jpg';
-    const title = item.title || 'Untitled';
-    const category = item.category || '';
-    const description = item.description || '';
+      const image =
+        item.image ||
+        './assets/embedded-image-2.jpg';
 
-    article.innerHTML = `
-      <img
-        alt="${escapeHtml(title)}"
-        class="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-80 group-hover:scale-105 transition-all duration-700 ease-out"
-        src="${escapeHtml(image)}"
-      />
+      const title =
+        item.title ||
+        'Untitled';
 
-      <div class="absolute inset-0 bg-gradient-to-t from-[#0A0A0B] via-[#0A0A0B]/40 to-transparent"></div>
+      const category =
+        item.category ||
+        '';
 
-      <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-        <div class="absolute -inset-20 bg-[#FF9E00]/10 blur-[80px]"></div>
-      </div>
+      const description =
+        item.description ||
+        '';
 
-      <span class="absolute top-2 left-2 md:top-3 md:left-3 font-mono-tech text-[10px] md:text-xs text-white/30">
-        ${String(index + 1).padStart(2, '0')}
-      </span>
+      article.innerHTML = `
+        <img
+          alt="${escapeHtml(title)}"
+          class="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-80 group-hover:scale-105 transition-all duration-700 ease-out"
+          src="${escapeHtml(image)}"
+        />
 
-      <div class="absolute top-2 right-2 md:top-3 md:right-3 ${
-        currentLayoutMode === 'grid' ? 'w-7 h-7 md:w-8 md:h-8' : 'w-10 h-10 md:w-12 md:h-12'
-      } flex items-center justify-center border border-white/20 rounded-full text-white/60 group-hover:border-[#FF9E00] group-hover:text-[#FF9E00] transition-colors">
-        <svg class="lucide lucide-play ${
-          currentLayoutMode === 'grid' ? 'w-3 h-3' : 'w-4 h-4 md:w-5 md:h-5'
-        }" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
-          <polygon points="6 3 20 12 6 21 6 3"></polygon>
-        </svg>
-      </div>
+        <div
+          class="absolute inset-0 bg-gradient-to-t from-[#0A0A0B] via-[#0A0A0B]/40 to-transparent"
+        ></div>
 
-      <div class="absolute bottom-0 left-0 right-0 ${
-        currentLayoutMode === 'grid' ? 'p-3 md:p-4' : 'p-4 md:p-8'
-      }">
-        <div class="overflow-hidden">
-          <span class="font-mono-tech text-[10px] md:text-xs uppercase tracking-widest text-[#FF9E00] block mb-0.5">
-            ${escapeHtml(category)}
-          </span>
+        <div
+          class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+        >
+          <div
+            class="absolute -inset-20 bg-[#FF9E00]/10 blur-[80px]"
+          ></div>
         </div>
 
-        <h3 class="font-heading font-bold ${
-          currentLayoutMode === 'grid' ? 'text-base md:text-lg line-clamp-1' : 'text-2xl md:text-4xl'
-        } text-white tracking-tight">
-          ${escapeHtml(title)}
-        </h3>
+        <span
+          class="absolute top-4 left-4 md:top-6 md:left-6 font-mono-tech text-xs text-white/30"
+        >
+          ${String(index + 1).padStart(2, '0')}
+        </span>
 
-        ${
-          currentLayoutMode === 'list'
-            ? `<p class="text-white/40 mt-1 max-w-lg text-xs md:text-sm line-clamp-2 group-hover:line-clamp-none transition-all">
-                ${escapeHtml(description)}
-              </p>`
-            : ''
-        }
-      </div>
-    `;
+        <div
+          class="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 md:w-12 md:h-12 flex items-center justify-center border border-white/20 rounded-full text-white/60 group-hover:border-[#FF9E00] group-hover:text-[#FF9E00] transition-colors"
+        >
+          <svg
+            class="lucide lucide-play w-4 h-4 md:w-5 md:h-5"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <polygon points="6 3 20 12 6 21 6 3"></polygon>
+          </svg>
+        </div>
 
-    if (item.link) {
-      article.addEventListener('click', () => {
-        window.open(item.link, '_blank', 'noopener,noreferrer');
-      });
+        <div
+          class="absolute bottom-0 left-0 right-0 p-6 md:p-10"
+        >
+          <div class="overflow-hidden">
+            <span
+              class="font-mono-tech text-xs uppercase tracking-widest text-[#FF9E00] block mb-2"
+            >
+              ${escapeHtml(category)}
+            </span>
+          </div>
+
+          <h3
+            class="font-heading font-bold text-3xl md:text-5xl text-white tracking-tight"
+          >
+            ${escapeHtml(title)}
+          </h3>
+
+          <p
+            class="text-white/40 mt-2 max-w-lg text-sm md:text-base line-clamp-2 group-hover:line-clamp-none transition-all"
+          >
+            ${escapeHtml(description)}
+          </p>
+        </div>
+      `;
+
+      if (item.link) {
+
+        article.addEventListener(
+          'click',
+          () => {
+
+            window.open(
+              item.link,
+              '_blank',
+              'noopener,noreferrer'
+            );
+
+          }
+        );
+      }
+
+      container.appendChild(
+        article
+      );
     }
+  );
 
-    container.appendChild(article);
-  });
-
-  console.log(`Loaded ${items.length} showcase items from D1.`);
-}
-
-function applyLayoutContainerStyles(container, mode) {
-  if (mode === 'grid') {
-    container.className = 'syx-showcase-container grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 transition-all duration-500 ease-in-out opacity-100';
-  } else {
-    container.className = 'syx-showcase-container flex flex-col gap-1 md:gap-2 transition-all duration-500 ease-in-out opacity-100';
-  }
-}
-
-function setPublicShowcaseLayout(mode) {
-  if (currentLayoutMode === mode) return;
-  currentLayoutMode = mode;
-
-  const btnList = document.getElementById('view-mode-list');
-  const btnGrid = document.getElementById('view-mode-grid');
-
-  if (btnList && btnGrid) {
-    btnList.classList.toggle('bg-[#FF9E00]', mode === 'list');
-    btnList.classList.toggle('!text-[#0A0A0B]', mode === 'list');
-    btnList.classList.toggle('border-[#FF9E00]', mode === 'list');
-
-    btnGrid.classList.toggle('bg-[#FF9E00]', mode === 'grid');
-    btnGrid.classList.toggle('!text-[#0A0A0B]', mode === 'grid');
-    btnGrid.classList.toggle('border-[#FF9E00]', mode === 'grid');
-  }
-
-  // Re-render showcase items with layout styling adjustments
-  renderPublicShowcase(showcaseItems);
+  console.log(
+    `Loaded ${items.length} showcase items from D1.`
+  );
 }
 
 
