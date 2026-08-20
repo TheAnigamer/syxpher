@@ -1134,7 +1134,7 @@ async function loadGdLevels() {
 // ==========================================
 
 function renderPublicGdLevels(items) {
-  const container = document.getElementById('gd-levels-container') || document.getElementById('levels-grid');
+  const container = document.getElementById('gd-levels-container');
   
   if (!container) {
     console.error('Could not find level container element in DOM.');
