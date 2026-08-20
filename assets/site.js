@@ -1163,7 +1163,7 @@ function renderPublicGdLevels(items) {
     card.className = `${cardClass} group relative bg-[#111114] border border-white/10 overflow-hidden cursor-pointer hover:border-[#FF9E00]/50 transition-all duration-300`;
 
     // Fallbacks to handle Admin vs. API naming differences
-    const image = item.image || item.imageUrl || './assets/embedded-image-1.jpg';
+    const image = item.image || item.imageUrl || 'https://placehold.co/600x400/111114/FF9E00?text=No+Image';
     const title = item.title || item.name || 'Untitled Level';
     const rawId = item.level_id || item.id || item.levelId;
     const levelId = rawId ? `ID: ${rawId}` : '';
