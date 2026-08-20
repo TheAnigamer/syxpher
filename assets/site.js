@@ -1142,26 +1142,49 @@ function renderPublicGdLevels(items) {
   }
 
   if (!items || items.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="no-levels">No levels available.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="no-levels">No levels available.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = items.map(l => {
+  tbody.innerHTML = items.map((l, index) => {
     const id = l.id || l.level_id || '';
     const name = l.name || l.title || 'Unnamed Level';
     const author = l.author || l.creator || 'Unknown';
+    
     const stars = l.difficulty?.stars ?? l.stars ?? 0;
-    const downloads = Number(l.downloads || 0).toLocaleString();
-    const likes = Number(l.likes || 0).toLocaleString();
-    const song = l.song || 'Unknown Song';
+    const diffName = l.difficulty?.name || (stars > 0 ? `${stars} Stars` : 'Unrated');
+    const isDemon = l.difficulty?.demon || stars === 10;
+    
+    // Proper SVG graphic icons matching your theme style instead of emojis
+    const starSvg = `<svg class="difficulty-icon star-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+    const gearSvg = `<svg class="difficulty-icon gear-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+    const diffIcon = stars > 0 ? starSvg : gearSvg;
+
+    const isRated = stars > 0 || l.status === 'RATED';
+    const statusClass = isRated ? 'rated' : 'unrated';
+    const statusText = isRated ? 'RATED' : 'UNRATED';
+
+    const category = l.category || (l.sourceType === 'profile' || author.toLowerCase() === 'syxpher' ? 'Levels On My Account' : 'Levels On Other Accounts');
+    const paddedIndex = String(index + 1).padStart(2, '0');
 
     return `
       <tr data-level-id="${id}">
-        <td><strong>${name}</strong> <span class="level-id">(#${id})</span></td>
-        <td>${author}</td>
-        <td>⭐ ${stars}</td>
-        <td>📥 ${downloads} / ❤️ ${likes}</td>
-        <td>🎵 ${song}</td>
+        <td class="col-index">${paddedIndex}</td>
+        <td class="col-name"><strong>${name}</strong></td>
+        <td class="col-id">${id}</td>
+        <td class="col-author">${author}</td>
+        <td class="col-difficulty">
+          <span class="diff-badge">${diffIcon} ${diffName}</span>
+        </td>
+        <td class="col-status">
+          <span class="status-pill ${statusClass}">${statusText}</span>
+        </td>
+        <td class="col-category">${category}</td>
+        <td class="col-link">
+          <a href="https://gdbrowser.com/${id}" target="_blank" rel="noopener" class="external-link">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+          </a>
+        </td>
       </tr>
     `;
   }).join('');
