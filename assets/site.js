@@ -877,6 +877,33 @@ function applySiteSettings() {
   }
 }
 
+// ==========================================
+// GD TRACKED LEVELS LOADER
+// ==========================================
+
+let gdLevels = [];
+
+async function loadGDLevels() {
+  try {
+    const response = await fetch(
+      'https://syxpher.krewtoons10anigamer.workers.dev/tracked-levels.json',
+      { cache: 'no-store' }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Levels API returned ${response.status}`);
+    }
+
+    gdLevels = await response.json();
+
+    // Call your render function if you have one, e.g.:
+    // renderGDArchive(gdLevels);
+
+  } catch (error) {
+    console.error('Failed to load tracked levels:', error);
+  }
+}
+
 
 // ==========================================
 // PUBLIC SHOWCASE LOADER
@@ -4441,6 +4468,8 @@ document.addEventListener(
     loadSiteSettings();
 
     loadShowcase();
+
+    loadGDLevels();
 
   }
 );
