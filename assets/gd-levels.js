@@ -130,7 +130,7 @@
     }
 
   function normalizeLevel(level) {
-    const rawStars = level?.stars ?? level?.difficulty?.stars ?? 0;
+    const rawStars = level?.stars ?? level?.star_count ?? level?.difficulty?.stars ?? 0;
     const parsedStars = Number.isFinite(Number(rawStars)) ? Number(rawStars) : 0;
 
     const isDemon = parseBool(level?.isDemon || level?.difficulty?.demon) || parsedStars >= 10;
