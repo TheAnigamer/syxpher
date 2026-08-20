@@ -43,7 +43,7 @@
     "id": "145707866",
     "name": "denominator",
     "author": "Syxpher",
-    "downloads": 624084,
+    "downloads": 624105,
     "likes": 35109,
     "difficulty": {
       "stars": 6,
@@ -122,26 +122,5 @@
     "song": "Every End...",
     "sourceType": "profile",
     "sourceKey": "syxpher"
-  },
-  {
-    "id": "127795261",
-    "name": "TURNING VIOLENT",
-    "author": "LupoDZN",
-    "downloads": 55669,
-    "likes": 1819,
-    "difficulty": {
-      "stars": 10,
-      "coins": 0,
-      "demon": false,
-      "auto": false
-    },
-    "ratings": {
-      "rated": true,
-      "featured": true,
-      "epic": true
-    },
-    "song": "1nput This 2 Y0ur Spine",
-    "sourceType": "list",
-    "sourceKey": "2638783"
   }
 ]
