@@ -342,36 +342,35 @@
     if (topCountEl) topCountEl.textContent = 'Loading…';
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'GET',
-        cache: 'no-store',
-        headers: {
-          Accept: 'application/json'
-        }
-      });
+          const res = await fetch(API_URL, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+              Accept: 'application/json'
+            }
+          });
+    
+          if (!res.ok) {
+            throw new Error(`Request failed with status ${res.status}`);
+          }
+    
+          const data = await res.json();
+      
+          // Normalize levels whether API returns [...] or { success: true, levels: [...] }
+          const rawLevels = Array.isArray(data) ? data : (data?.levels || []);
+    
+          if (!Array.isArray(rawLevels)) {
+            throw new Error('The levels API response is missing the expected levels array.');
+          }
 
-      if (!res.ok) {
-        throw new Error(`Request failed with status ${res.status}`);
-      }
-
-      const data = await res.json();
-
-      if (!data || data.success !== true) {
-        throw new Error('The levels API returned an unsuccessful response.');
-      }
-
-      if (!Array.isArray(data.levels)) {
-        throw new Error('The levels API response is missing the expected levels array.');
-      }
-
-      const levels = data.levels.map(normalizeLevel);
-      setupLevelControls(levels);
-    } catch (err) {
-      console.error('Failed to load Geometry Dash levels:', err);
-      renderMessage(tbody, 'Unable to load levels right now. Check the browser console for the API error.');
-      if (countEl) countEl.textContent = 'Showing 0 of 0 levels';
-      if (topCountEl) topCountEl.textContent = '0';
-    }
+          const levels = rawLevels.map(normalizeLevel);
+          setupLevelControls(levels);
+        } catch (err) {
+          console.error('Failed to load Geometry Dash levels:', err);
+          renderMessage(tbody, 'Unable to load levels right now. Check the browser console for the API error.');
+          if (countEl) countEl.textContent = 'Showing 0 of 0 levels';
+          if (topCountEl) topCountEl.textContent = '0';
+       }
   }
 
   if (document.readyState === 'loading') {
