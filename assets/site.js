@@ -1134,35 +1134,44 @@ async function loadGdLevels() {
 // ==========================================
 
 function renderPublicGdLevels(items) {
-  // Normalize properties so it works regardless of source
-  const normalizedLevels = items.map(l => ({
-    id: l.id || l.level_id,
-    name: l.name || l.title || 'Unnamed Level',
-    author: l.author || l.creator || 'Unknown',
-    sourceType: l.sourceType || 'manual',
-    downloads: l.downloads || 0,
-    likes: l.likes || 0,
-    stars: l.difficulty?.stars ?? l.stars ?? 0,
-    song: l.song || 'Unknown Song'
-  }));
-
-  // Separate into categories
-  const soloLevels = normalizedLevels.filter(l => 
-    l.sourceType === 'profile' || l.author.toLowerCase() === 'syxpher'
-  );
+  const container = document.getElementById('gd-levels-container') || document.getElementById('levels-grid');
   
-  const collabLevels = normalizedLevels.filter(l => 
-    l.sourceType === 'list' || (l.author.toLowerCase() !== 'syxpher' && l.sourceType !== 'manual')
-  );
-  
-  const manualLevels = normalizedLevels.filter(l => 
-    l.sourceType === 'manual'
-  );
+  if (!container) {
+    console.error('Could not find level container element in DOM.');
+    return;
+  }
 
-  // Pass to your UI containers
-  renderCategoryContainer('solo-container', soloLevels);
-  renderCategoryContainer('collab-container', collabLevels);
-  renderCategoryContainer('manual-container', manualLevels);
+  if (!items || items.length === 0) {
+    container.innerHTML = '<p class="no-levels">No Geometry Dash levels found.</p>';
+    return;
+  }
+
+  // Normalize and render level cards directly into the container
+  container.innerHTML = items.map(l => {
+    const id = l.id || l.level_id || '';
+    const name = l.name || l.title || 'Unnamed Level';
+    const author = l.author || l.creator || 'Unknown';
+    const stars = l.difficulty?.stars ?? l.stars ?? 0;
+    const downloads = Number(l.downloads || 0).toLocaleString();
+    const likes = Number(l.likes || 0).toLocaleString();
+    const song = l.song || 'Unknown Song';
+
+    return `
+      <div class="level-card" data-level-id="${id}">
+        <div class="level-header">
+          <h3>${name}</h3>
+          <span class="level-id">#${id}</span>
+        </div>
+        <p class="author">By <strong>${author}</strong></p>
+        <div class="level-stats">
+          <span>⭐ ${stars}</span>
+          <span>📥 ${downloads}</span>
+          <span>❤️ ${likes}</span>
+        </div>
+        <p class="song-info">🎵 ${song}</p>
+      </div>
+    `;
+  }).join('');
 }
 
 // yes
