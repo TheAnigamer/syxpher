@@ -1165,6 +1165,36 @@ function renderPublicGdLevels(items) {
   renderCategoryContainer('manual-container', manualLevels);
 }
 
+// yes
+// RENDER CATEGORY CONTAINER
+// =====================================
+
+function renderCategoryContainer(containerId, levelArray) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  if (!levelArray || levelArray.length === 0) {
+    container.innerHTML = '<p class="no-levels">No levels found in this category.</p>';
+    return;
+  }
+
+  container.innerHTML = levelArray.map(level => `
+    <div class="level-card" data-level-id="${level.id}">
+      <div class="level-header">
+        <h3>${level.name}</h3>
+        <span class="level-id">#${level.id}</span>
+      </div>
+      <p class="author">By <strong>${level.author}</strong></p>
+      <div class="level-stats">
+        <span>⭐ ${level.stars}</span>
+        <span>📥 ${Number(level.downloads).toLocaleString()}</span>
+        <span>❤️ ${Number(level.likes).toLocaleString()}</span>
+      </div>
+      <p class="song-info">🎵 ${level.song}</p>
+    </div>
+  `).join('');
+}
+
 // ==========================================
 // CREATE ADMIN PANEL
 // ==========================================
