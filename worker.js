@@ -169,7 +169,7 @@ async function requireAdmin(request, env) {
 
 
 // ==========================================
-// SITE SETTINGS & TABLE HELPERS
+// SITE SETTINGS & GD LEVELS HELPERS
 // ==========================================
 
 async function getSiteSettings(env) {
@@ -193,7 +193,7 @@ async function ensureLevelsTable(env) {
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS levels (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        level_id TEXT,
+        level_id TEXT UNIQUE,
         title TEXT,
         name TEXT,
         creator TEXT,
@@ -202,12 +202,122 @@ async function ensureLevelsTable(env) {
         video_url TEXT,
         link TEXT,
         difficulty TEXT,
-        sort_order INTEGER DEFAULT 0
+        sort_order INTEGER DEFAULT 0,
+        is_deleted INTEGER DEFAULT 0
       )
     `).run();
   } catch (e) {
     console.error("Could not initialize levels table:", e);
   }
+}
+
+async function getAllLevels(env) {
+  await ensureLevelsTable(env);
+
+  let botLevels = [];
+  try {
+    const res = await fetch(
+      "https://gd-sync-308073055710.us-south1.run.app/?mode=curated",
+      { headers: { Accept: "application/json" } }
+    );
+    if (res.ok) {
+      botLevels = await res.json();
+      if (!Array.isArray(botLevels)) botLevels = [];
+    }
+  } catch (e) {
+    console.error("Cloud Run GD fetch failed:", e);
+  }
+
+  let d1Rows = [];
+  try {
+    const { results } = await env.DB.prepare(`SELECT * FROM levels`).all();
+    d1Rows = results || [];
+  } catch (e) {
+    console.error("D1 levels fetch failed:", e);
+  }
+
+  const d1ByLevelId = new Map();
+  const deletedSet = new Set();
+
+  for (const row of d1Rows) {
+    if (row.is_deleted) {
+      if (row.level_id) deletedSet.add(String(row.level_id));
+      if (row.id) deletedSet.add(String(row.id));
+      continue;
+    }
+    if (row.level_id) d1ByLevelId.set(String(row.level_id), row);
+  }
+
+  const combined = [];
+  const processedD1Ids = new Set();
+
+  for (const botItem of botLevels) {
+    const levelIdStr = String(botItem.level_id || botItem.id || "");
+
+    if (deletedSet.has(levelIdStr)) continue;
+
+    if (levelIdStr && d1ByLevelId.has(levelIdStr)) {
+      const d1Item = d1ByLevelId.get(levelIdStr);
+      processedD1Ids.add(d1Item.id);
+
+      combined.push({
+        id: d1Item.id,
+        level_id: d1Item.level_id || levelIdStr,
+        title: d1Item.title || d1Item.name || botItem.title || botItem.name || "",
+        name: d1Item.name || d1Item.title || botItem.name || botItem.title || "",
+        creator: d1Item.creator || botItem.creator || botItem.author || "",
+        description: d1Item.description ?? botItem.description ?? "",
+        video: d1Item.video || d1Item.video_url || botItem.video || botItem.video_url || botItem.link || "",
+        video_url: d1Item.video_url || d1Item.video || botItem.video_url || botItem.video || "",
+        link: d1Item.link || d1Item.video || botItem.link || "",
+        difficulty: d1Item.difficulty || botItem.difficulty || "",
+        sort_order: d1Item.sort_order ?? botItem.sort_order ?? 0
+      });
+    } else {
+      combined.push({
+        id: botItem.id || levelIdStr,
+        level_id: levelIdStr,
+        title: botItem.title || botItem.name || "",
+        name: botItem.name || botItem.title || "",
+        creator: botItem.creator || botItem.author || "",
+        description: botItem.description || "",
+        video: botItem.video || botItem.video_url || botItem.youtube || botItem.link || "",
+        video_url: botItem.video_url || botItem.video || botItem.youtube || botItem.link || "",
+        link: botItem.link || botItem.video || "",
+        difficulty: botItem.difficulty || "",
+        sort_order: botItem.sort_order ?? 0
+      });
+    }
+  }
+
+  for (const row of d1Rows) {
+    if (row.is_deleted || processedD1Ids.has(row.id)) continue;
+
+    if (
+      row.level_id &&
+      botLevels.some((b) => String(b.level_id || b.id) === String(row.level_id))
+    ) {
+      continue;
+    }
+
+    combined.push({
+      id: row.id,
+      level_id: row.level_id || String(row.id),
+      title: row.title || row.name || "",
+      name: row.name || row.title || "",
+      creator: row.creator || "",
+      description: row.description || "",
+      video: row.video || row.video_url || row.link || "",
+      video_url: row.video_url || row.video || row.link || "",
+      link: row.link || row.video || "",
+      difficulty: row.difficulty || "",
+      sort_order: row.sort_order ?? 0
+    });
+  }
+
+  combined.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+  return combined;
 }
 
 
@@ -708,30 +818,15 @@ export default {
       request.method === "GET"
     ) {
       if (!(await requireAdmin(request, env))) {
-        return json(
-          { error: "Unauthorized" },
-          401
-        );
+        return json({ error: "Unauthorized" }, 401);
       }
 
       try {
-        await ensureLevelsTable(env);
-        const { results } =
-          await env.DB.prepare(
-            `SELECT * FROM levels
-             ORDER BY sort_order ASC, id ASC`
-          ).all();
-
-        return json(results || []);
+        const levels = await getAllLevels(env);
+        return json(levels);
       } catch (error) {
         console.error(error);
-
-        return json(
-          {
-            error: "Could not load levels"
-          },
-          500
-        );
+        return json({ error: "Could not load levels" }, 500);
       }
     }
 
@@ -746,10 +841,7 @@ export default {
       request.method === "POST"
     ) {
       if (!(await requireAdmin(request, env))) {
-        return json(
-          { error: "Unauthorized" },
-          401
-        );
+        return json({ error: "Unauthorized" }, 401);
       }
 
       try {
@@ -758,10 +850,7 @@ export default {
 
         const title = body.title || body.name || "";
         if (!title && !body.level_id) {
-          return json(
-            { error: "Title or Level ID is required" },
-            400
-          );
+          return json({ error: "Title or Level ID is required" }, 400);
         }
 
         const max = await env.DB.prepare(
@@ -769,26 +858,27 @@ export default {
         ).first();
 
         const sortOrder = Number(max?.max_order || 0) + 1;
-
         const videoLink = String(body.video || body.video_url || body.youtube || body.link || "");
+        const levelId = String(body.level_id || body.levelId || Date.now());
 
         const result = await env.DB.prepare(
           `INSERT INTO levels (
-             level_id,
-             title,
-             name,
-             creator,
-             description,
-             video,
-             video_url,
-             link,
-             difficulty,
-             sort_order
+             level_id, title, name, creator, description, video, video_url, link, difficulty, sort_order, is_deleted
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+           ON CONFLICT(level_id) DO UPDATE SET
+             title = excluded.title,
+             name = excluded.name,
+             creator = excluded.creator,
+             description = excluded.description,
+             video = excluded.video,
+             video_url = excluded.video_url,
+             link = excluded.link,
+             difficulty = excluded.difficulty,
+             is_deleted = 0`
         )
           .bind(
-            String(body.level_id || body.levelId || ""),
+            levelId,
             String(title),
             String(title),
             String(body.creator || body.author || ""),
@@ -803,15 +893,11 @@ export default {
 
         return json({
           ok: true,
-          id: result.meta.last_row_id
+          id: result.meta.last_row_id || levelId
         });
       } catch (error) {
         console.error(error);
-
-        return json(
-          { error: "Could not create level" },
-          500
-        );
+        return json({ error: "Could not create level" }, 500);
       }
     }
 
@@ -827,10 +913,7 @@ export default {
       request.method === "PUT"
     ) {
       if (!(await requireAdmin(request, env))) {
-        return json(
-          { error: "Unauthorized" },
-          401
-        );
+        return json({ error: "Unauthorized" }, 401);
       }
 
       try {
@@ -840,22 +923,25 @@ export default {
 
         const title = body.title || body.name || "";
         const videoLink = String(body.video || body.video_url || body.youtube || body.link || "");
+        const levelId = String(body.level_id || body.levelId || id);
 
         await env.DB.prepare(
-          `UPDATE levels
-           SET level_id = ?,
-               title = ?,
-               name = ?,
-               creator = ?,
-               description = ?,
-               video = ?,
-               video_url = ?,
-               link = ?,
-               difficulty = ?
-           WHERE id = ?`
+          `INSERT INTO levels (
+             level_id, title, name, creator, description, video, video_url, link, difficulty, is_deleted
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+           ON CONFLICT(level_id) DO UPDATE SET
+             title = excluded.title,
+             name = excluded.name,
+             creator = excluded.creator,
+             description = excluded.description,
+             video = excluded.video,
+             video_url = excluded.video_url,
+             link = excluded.link,
+             difficulty = excluded.difficulty,
+             is_deleted = 0`
         )
           .bind(
-            String(body.level_id || body.levelId || ""),
+            levelId,
             String(title),
             String(title),
             String(body.creator || body.author || ""),
@@ -863,19 +949,14 @@ export default {
             videoLink,
             videoLink,
             String(body.link || videoLink),
-            String(body.difficulty || ""),
-            id
+            String(body.difficulty || "")
           )
           .run();
 
         return json({ ok: true });
       } catch (error) {
         console.error(error);
-
-        return json(
-          { error: "Could not update level" },
-          500
-        );
+        return json({ error: "Could not update level" }, 500);
       }
     }
 
@@ -891,10 +972,7 @@ export default {
       request.method === "DELETE"
     ) {
       if (!(await requireAdmin(request, env))) {
-        return json(
-          { error: "Unauthorized" },
-          401
-        );
+        return json({ error: "Unauthorized" }, 401);
       }
 
       try {
@@ -902,19 +980,24 @@ export default {
         const id = url.pathname.split("/").pop();
 
         await env.DB.prepare(
-          `DELETE FROM levels WHERE id = ?`
+          `INSERT INTO levels (level_id, is_deleted) VALUES (?, 1)
+           ON CONFLICT(level_id) DO UPDATE SET is_deleted = 1`
         )
-          .bind(id)
+          .bind(String(id))
           .run();
+
+        if (!isNaN(Number(id))) {
+          await env.DB.prepare(
+            `UPDATE levels SET is_deleted = 1 WHERE id = ?`
+          )
+            .bind(Number(id))
+            .run();
+        }
 
         return json({ ok: true });
       } catch (error) {
         console.error(error);
-
-        return json(
-          { error: "Could not delete level" },
-          500
-        );
+        return json({ error: "Could not delete level" }, 500);
       }
     }
 
@@ -929,10 +1012,7 @@ export default {
       request.method === "POST"
     ) {
       if (!(await requireAdmin(request, env))) {
-        return json(
-          { error: "Unauthorized" },
-          401
-        );
+        return json({ error: "Unauthorized" }, 401);
       }
 
       try {
@@ -940,30 +1020,33 @@ export default {
         const body = await request.json();
 
         if (!Array.isArray(body.ids)) {
-          return json(
-            { error: "Invalid order" },
-            400
-          );
+          return json({ error: "Invalid order" }, 400);
         }
 
-        const statements = body.ids.map((id, index) =>
-          env.DB.prepare(
-            `UPDATE levels SET sort_order = ? WHERE id = ?`
-          ).bind(index + 1, id)
-        );
+        for (let index = 0; index < body.ids.length; index++) {
+          const idStr = String(body.ids[index]);
+          const order = index + 1;
 
-        if (statements.length) {
-          await env.DB.batch(statements);
+          await env.DB.prepare(
+            `INSERT INTO levels (level_id, sort_order) VALUES (?, ?)
+             ON CONFLICT(level_id) DO UPDATE SET sort_order = excluded.sort_order`
+          )
+            .bind(idStr, order)
+            .run();
+
+          if (!isNaN(Number(idStr))) {
+            await env.DB.prepare(
+              `UPDATE levels SET sort_order = ? WHERE id = ?`
+            )
+              .bind(order, Number(idStr))
+              .run();
+          }
         }
 
         return json({ ok: true });
       } catch (error) {
         console.error(error);
-
-        return json(
-          { error: "Could not reorder levels" },
-          500
-        );
+        return json({ error: "Could not reorder levels" }, 500);
       }
     }
 
@@ -977,43 +1060,10 @@ export default {
       request.method === "GET"
     ) {
       try {
-        const response =
-          await fetch(
-            "https://gd-sync-308073055710.us-south1.run.app/?mode=curated",
-            {
-              headers: {
-                Accept:
-                  "application/json"
-              }
-            }
-          );
-
-        if (response.ok) {
-          return new Response(
-            response.body,
-            {
-              status: response.status,
-              headers: {
-                "Content-Type":
-                  response.headers.get("Content-Type") || "application/json",
-                "Cache-Control": "no-store"
-              }
-            }
-          );
-        }
+        const levels = await getAllLevels(env);
+        return json(levels);
       } catch (error) {
-        console.error("Cloud Run GD fetch failed, falling back to D1:", error);
-      }
-
-      // Fallback to D1 levels if external fetch fails
-      try {
-        await ensureLevelsTable(env);
-        const { results } = await env.DB.prepare(
-          `SELECT * FROM levels ORDER BY sort_order ASC, id ASC`
-        ).all();
-
-        return json(results || []);
-      } catch {
+        console.error(error);
         return json({ error: "Geometry Dash API unavailable" }, 502);
       }
     }
@@ -1024,16 +1074,9 @@ export default {
     // ========================================
 
     if (env.ASSETS) {
-      return env.ASSETS.fetch(
-        request
-      );
+      return env.ASSETS.fetch(request);
     }
 
-    return new Response(
-      "Site assets unavailable",
-      {
-        status: 500
-      }
-    );
+    return new Response("Site assets unavailable", { status: 500 });
   }
 };
