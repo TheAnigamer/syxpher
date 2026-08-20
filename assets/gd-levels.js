@@ -119,22 +119,24 @@
     return "Levels I've Built On";
   }
 
+  function parseBool(val) {
+      if (typeof val === 'boolean') return val;
+      if (typeof val === 'number') return val > 0;
+      if (typeof val === 'string') {
+        const s = val.trim().toLowerCase();
+        return s === 'true' || s === '1';
+      }
+      return false;
+    }
+
   function normalizeLevel(level) {
-    // Read stars from flat field or nested object
     const rawStars = level?.stars ?? level?.difficulty?.stars ?? 0;
     const parsedStars = Number.isFinite(Number(rawStars)) ? Number(rawStars) : 0;
 
-    const isDemon = Boolean(
-      level?.isDemon ||
-      level?.difficulty?.demon ||
-      parsedStars >= 10 ||
-      String(level?.difficulty || '').toLowerCase().includes('demon')
-    );
-
-    // Read ratings from flat fields or nested objects
-    const isEpic = Boolean(level?.epic || level?.ratings?.epic);
-    const isFeatured = Boolean(level?.featured || level?.ratings?.featured || parsedStars > 0);
-    const isRated = Boolean(level?.rated || level?.ratings?.rated || parsedStars > 0 || isFeatured || isEpic);
+    const isDemon = parseBool(level?.isDemon || level?.difficulty?.demon) || parsedStars >= 10;
+    const isEpic = parseBool(level?.epic || level?.ratings?.epic);
+    const isFeatured = parseBool(level?.featured || level?.ratings?.featured);
+    const isRated = parseBool(level?.rated || level?.ratings?.rated) || parsedStars > 0 || isFeatured || isEpic;
 
     return {
       ...level,
@@ -147,7 +149,7 @@
         stars: parsedStars,
         coins: Number.isFinite(Number(level?.coins || level?.difficulty?.coins)) ? Number(level?.coins || level?.difficulty?.coins) : 0,
         demon: isDemon,
-        auto: Boolean(level?.auto || level?.difficulty?.auto)
+        auto: parseBool(level?.auto || level?.difficulty?.auto)
       },
       ratings: {
         rated: isRated,
