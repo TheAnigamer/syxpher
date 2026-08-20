@@ -1103,19 +1103,19 @@ function renderPublicShowcase(
 
 async function loadGdLevels() {
   try {
-    const response = await fetch('/api/gd-levels', {
+    const response = await fetch('/tracked-levels.json', {
       method: 'GET',
       cache: 'no-store'
     });
 
     if (!response.ok) {
-      throw new Error(`GD Levels API returned ${response.status}`);
+      throw new Error(`tracked-levels.json returned ${response.status}`);
     }
 
     const items = await response.json();
 
     if (!Array.isArray(items)) {
-      throw new Error('Invalid GD Levels API response');
+      throw new Error('Invalid tracked levels JSON response');
     }
 
     gdLevelItems = items;
