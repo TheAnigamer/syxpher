@@ -743,18 +743,22 @@ export default {
     }
 
     // PUBLIC GEOMETRY DASH LEVELS
-    if (
-      (url.pathname === "/api/levels" || url.pathname === "/api/gd-levels" || url.pathname === "/api/curated" || url.pathname === "/api/get-levels") &&
-      request.method === "GET"
-    ) {
-      try {
-        const levels = await getAllLevels(env);
-        return json(levels);
-      } catch (error) {
-        console.error(error);
-        return json({ error: "Geometry Dash API unavailable" }, 502);
-      }
-    }
+        if (
+          (url.pathname === "/api/levels" || 
+           url.pathname === "/api/gd-levels" || 
+           url.pathname === "/api/curated" || 
+           url.pathname === "/api/get-levels" || 
+           url.pathname === "/tracked-levels.json") &&
+          request.method === "GET"
+        ) {
+          try {
+            const levels = await getAllLevels(env);
+            return json(levels);
+          } catch (error) {
+            console.error(error);
+            return json({ error: "Geometry Dash API unavailable" }, 502);
+          }
+        }
 
     // STATIC SITE
     if (env.ASSETS) {
