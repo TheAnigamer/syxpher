@@ -1132,7 +1132,14 @@ async function loadGdLevels() {
 // ==========================================
 
 function renderPublicGdLevels(items) {
+  console.log('GD Items received:', items); // <-- ADD THIS LINE
+  
   const archive = document.getElementById('archive');
+  if (!archive) {
+    console.error('Could not find element with id="archive"');
+    return;
+  }
+  
   const container = archive?.querySelector('.grid, .syx-archive-grid') || archive?.querySelector(':scope > div:nth-child(2)');
   
   if (!container) {
@@ -1141,10 +1148,11 @@ function renderPublicGdLevels(items) {
   }
 
   console.log('Rendering levels:', items);
-
+  
+  const levelList = Array.isArray(items) ? items : (items?.levels || items?.data || []);
   container.innerHTML = '';
 
-  items.forEach((item, index) => {
+  levelList.forEach((item, index) => {
     const card = document.createElement('div');
 
     // --- ADDED HERE ---
