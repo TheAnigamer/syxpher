@@ -148,7 +148,8 @@ function json(data, status = 200) {
     status,
     headers: {
       "Content-Type": "application/json",
-      "Cache-Control": "no-store"
+      "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": "*"
     }
   });
 }
@@ -167,6 +168,13 @@ async function requireAdmin(request, env) {
   );
 }
 
+function cleanStr(val) {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "object") {
+    return val.name || val.title || val.label || val.username || val.text || "";
+  }
+  return String(val);
+}
 
 // ==========================================
 // DB & MIGRATION HELPERS
@@ -207,7 +215,6 @@ async function ensureLevelsTable(env) {
       )
     `).run();
 
-    // Auto-migrate missing columns for pre-existing tables
     const extraCols = [
       ["level_id", "TEXT"],
       ["is_deleted", "INTEGER DEFAULT 0"],
@@ -222,9 +229,7 @@ async function ensureLevelsTable(env) {
     for (const [col, type] of extraCols) {
       try {
         await env.DB.prepare(`ALTER TABLE levels ADD COLUMN ${col} ${type}`).run();
-      } catch (e) {
-        // Column already exists
-      }
+      } catch (e) {}
     }
   } catch (e) {
     console.error("Could not initialize levels table:", e);
@@ -263,7 +268,6 @@ async function getAllLevels(env) {
   }
 
   const d1ByLevelId = new Map();
-  const d1ById = new Map();
   const deletedSet = new Set();
 
   for (const row of d1Rows) {
@@ -277,7 +281,6 @@ async function getAllLevels(env) {
     }
 
     if (levelIdKey) d1ByLevelId.set(levelIdKey, row);
-    if (idKey) d1ById.set(idKey, row);
   }
 
   const combined = [];
@@ -291,35 +294,49 @@ async function getAllLevels(env) {
       continue;
     }
 
+    const botTitle = cleanStr(botItem.title || botItem.name || "");
+    const botCreator = cleanStr(botItem.creator || botItem.author || "");
+    const botDifficulty = cleanStr(botItem.difficulty || botItem.rating || "");
+    const botDesc = cleanStr(botItem.description || "");
+    const botVideo = cleanStr(botItem.video || botItem.video_url || botItem.youtube || botItem.link || "");
+
     if (levelIdStr && d1ByLevelId.has(levelIdStr)) {
       const d1Item = d1ByLevelId.get(levelIdStr);
       processedD1Ids.add(d1Item.id);
 
+      const titleVal = cleanStr(d1Item.title || d1Item.name || botTitle);
+      const creatorVal = cleanStr(d1Item.creator || botCreator);
+      const diffVal = cleanStr(d1Item.difficulty || botDifficulty);
+      const descVal = cleanStr(d1Item.description ?? botDesc);
+      const videoVal = cleanStr(d1Item.video || d1Item.video_url || botVideo);
+
       combined.push({
         id: d1Item.id,
         level_id: d1Item.level_id || levelIdStr,
-        title: d1Item.title || d1Item.name || botItem.title || botItem.name || "",
-        name: d1Item.name || d1Item.title || botItem.name || botItem.title || "",
-        creator: d1Item.creator || botItem.creator || botItem.author || "",
-        description: d1Item.description ?? botItem.description ?? "",
-        video: d1Item.video || d1Item.video_url || botItem.video || botItem.video_url || botItem.link || "",
-        video_url: d1Item.video_url || d1Item.video || botItem.video_url || botItem.video || "",
-        link: d1Item.link || d1Item.video || botItem.link || "",
-        difficulty: d1Item.difficulty || botItem.difficulty || "",
+        title: titleVal,
+        name: titleVal,
+        creator: creatorVal,
+        author: creatorVal,
+        description: descVal,
+        difficulty: diffVal,
+        video: videoVal,
+        video_url: videoVal,
+        link: videoVal,
         sort_order: d1Item.sort_order ?? botItem.sort_order ?? 0
       });
     } else {
       combined.push({
         id: levelIdStr || Date.now(),
         level_id: levelIdStr,
-        title: botItem.title || botItem.name || "",
-        name: botItem.name || botItem.title || "",
-        creator: botItem.creator || botItem.author || "",
-        description: botItem.description || "",
-        video: botItem.video || botItem.video_url || botItem.youtube || botItem.link || "",
-        video_url: botItem.video_url || botItem.video || botItem.youtube || botItem.link || "",
-        link: botItem.link || botItem.video || "",
-        difficulty: botItem.difficulty || "",
+        title: botTitle,
+        name: botTitle,
+        creator: botCreator,
+        author: botCreator,
+        description: botDesc,
+        difficulty: botDifficulty,
+        video: botVideo,
+        video_url: botVideo,
+        link: botVideo,
         sort_order: botItem.sort_order ?? 0
       });
     }
@@ -328,17 +345,24 @@ async function getAllLevels(env) {
   for (const row of d1Rows) {
     if (row.is_deleted === 1 || processedD1Ids.has(row.id)) continue;
 
+    const titleVal = cleanStr(row.title || row.name || "");
+    const creatorVal = cleanStr(row.creator || "");
+    const diffVal = cleanStr(row.difficulty || "");
+    const descVal = cleanStr(row.description || "");
+    const videoVal = cleanStr(row.video || row.video_url || row.link || "");
+
     combined.push({
       id: row.id,
-      level_id: row.level_id || String(row.id),
-      title: row.title || row.name || "",
-      name: row.name || row.title || "",
-      creator: row.creator || "",
-      description: row.description || "",
-      video: row.video || row.video_url || row.link || "",
-      video_url: row.video_url || row.video || row.link || "",
-      link: row.link || row.video || "",
-      difficulty: row.difficulty || "",
+      level_id: cleanStr(row.level_id) || String(row.id),
+      title: titleVal,
+      name: titleVal,
+      creator: creatorVal,
+      author: creatorVal,
+      description: descVal,
+      difficulty: diffVal,
+      video: videoVal,
+      video_url: videoVal,
+      link: videoVal,
       sort_order: row.sort_order ?? 0
     });
   }
@@ -876,14 +900,17 @@ export default {
         await ensureLevelsTable(env);
         const body = await request.json();
 
-        const title = String(body.title || body.name || "");
-        const levelId = String(body.level_id || body.levelId || Date.now());
+        const title = cleanStr(body.title || body.name || "");
+        const levelId = cleanStr(body.level_id || body.levelId || Date.now());
 
         if (!title && !levelId) {
           return json({ error: "Title or Level ID is required" }, 400);
         }
 
-        const videoLink = String(body.video || body.video_url || body.youtube || body.link || "");
+        const videoLink = cleanStr(body.video || body.video_url || body.youtube || body.link || "");
+        const creator = cleanStr(body.creator || body.author || "");
+        const difficulty = cleanStr(body.difficulty || "");
+        const description = cleanStr(body.description || "");
 
         const max = await env.DB.prepare(
           `SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM levels`
@@ -902,9 +929,9 @@ export default {
                video = ?, video_url = ?, link = ?, difficulty = ?, is_deleted = 0
              WHERE level_id = ?`
           ).bind(
-            title, title, String(body.creator || body.author || ""),
-            String(body.description || ""), videoLink, videoLink,
-            String(body.link || videoLink), String(body.difficulty || ""), levelId
+            title, title, creator,
+            description, videoLink, videoLink,
+            String(body.link || videoLink), difficulty, levelId
           ).run();
 
           return json({ ok: true, id: existing.id });
@@ -915,9 +942,9 @@ export default {
                video, video_url, link, difficulty, sort_order, is_deleted
              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
           ).bind(
-            levelId, title, title, String(body.creator || body.author || ""),
-            String(body.description || ""), videoLink, videoLink,
-            String(body.link || videoLink), String(body.difficulty || ""), sortOrder
+            levelId, title, title, creator,
+            description, videoLink, videoLink,
+            String(body.link || videoLink), difficulty, sortOrder
           ).run();
 
           return json({ ok: true, id: result.meta?.last_row_id || levelId });
@@ -948,9 +975,12 @@ export default {
         const id = url.pathname.split("/").pop();
         const body = await request.json();
 
-        const title = String(body.title || body.name || "");
-        const videoLink = String(body.video || body.video_url || body.youtube || body.link || "");
-        const levelId = String(body.level_id || body.levelId || id);
+        const title = cleanStr(body.title || body.name || "");
+        const videoLink = cleanStr(body.video || body.video_url || body.youtube || body.link || "");
+        const levelId = cleanStr(body.level_id || body.levelId || id);
+        const creator = cleanStr(body.creator || body.author || "");
+        const difficulty = cleanStr(body.difficulty || "");
+        const description = cleanStr(body.description || "");
 
         const existing = await env.DB.prepare(
           `SELECT id FROM levels WHERE level_id = ? OR id = ?`
@@ -963,9 +993,9 @@ export default {
                video = ?, video_url = ?, link = ?, difficulty = ?, is_deleted = 0
              WHERE id = ?`
           ).bind(
-            title, title, String(body.creator || body.author || ""),
-            String(body.description || ""), videoLink, videoLink,
-            String(body.link || videoLink), String(body.difficulty || ""), existing.id
+            title, title, creator,
+            description, videoLink, videoLink,
+            String(body.link || videoLink), difficulty, existing.id
           ).run();
         } else {
           await env.DB.prepare(
@@ -974,9 +1004,9 @@ export default {
                video, video_url, link, difficulty, is_deleted
              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
           ).bind(
-            levelId, title, title, String(body.creator || body.author || ""),
-            String(body.description || ""), videoLink, videoLink,
-            String(body.link || videoLink), String(body.difficulty || "")
+            levelId, title, title, creator,
+            description, videoLink, videoLink,
+            String(body.link || videoLink), difficulty
           ).run();
         }
 
@@ -1077,7 +1107,10 @@ export default {
     // ========================================
 
     if (
-      url.pathname === "/api/levels" &&
+      (url.pathname === "/api/levels" ||
+       url.pathname === "/api/gd-levels" ||
+       url.pathname === "/api/curated" ||
+       url.pathname === "/api/get-levels") &&
       request.method === "GET"
     ) {
       try {
