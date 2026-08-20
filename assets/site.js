@@ -1132,71 +1132,13 @@ async function loadGdLevels() {
 // ==========================================
 
 function renderPublicGdLevels(items) {
-  console.log('GD Items received:', items); // <-- ADD THIS LINE
-  
+  // Clear grid container to only show the table view
   const archive = document.getElementById('archive');
-  if (!archive) {
-    console.error('Could not find element with id="archive"');
-    return;
+  if (archive) {
+    const grid = archive.querySelector('.grid, .syx-archive-grid');
+    if (grid) grid.innerHTML = '';
   }
-  
-  const container = archive?.querySelector('.grid, .syx-archive-grid') || archive?.querySelector(':scope > div:nth-child(2)');
-  
-  if (!container) {
-    console.warn('GD Levels container not found in DOM!');
-    return;
-  }
-
-  console.log('Rendering levels:', items);
-  
-  const levelList = Array.isArray(items) ? items : (items?.levels || items?.data || []);
-  container.innerHTML = '';
-
-  levelList.forEach((item, index) => {
-    const card = document.createElement('div');
-
-    // --- ADDED HERE ---
-  // Check both bot flags
-    const isBot = item.is_bot || item.source === 'bot';
-    const cardClass = isBot ? 'level-item bot-level-card' : 'level-item';
-
-    card.className = `${cardClass} group relative bg-[#111114] border border-white/10 overflow-hidden cursor-pointer hover:border-[#FF9E00]/50 transition-all duration-300`;
-
-    // Fallbacks to handle Admin vs. API naming differences
-    const image = item.image || item.imageUrl || 'https://placehold.co/600x400/111114/FF9E00?text=No+Image';
-    const title = item.title || item.name || 'Untitled Level';
-    const rawId = item.level_id || item.id || item.levelId;
-    const levelId = rawId ? `ID: ${rawId}` : '';
-    const difficulty = item.difficulty || (item.stars !== undefined ? `${item.stars} Stars` : 'Featured');
-    const description = item.description || '';
-
-    card.innerHTML = `
-      <div class="aspect-video w-full overflow-hidden relative">
-        <img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-        <div class="absolute inset-0 bg-gradient-to-t from-[#111114] via-transparent to-transparent"></div>
-        <span class="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 border border-white/10 font-mono-tech text-[10px] text-[#00f5ff]">
-          ${escapeHtml(difficulty)}
-        </span>
-      </div>
-      <div class="p-5">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="font-heading font-bold text-xl text-white group-hover:text-[#FF9E00] transition-colors">${escapeHtml(title)}</h3>
-          <span class="font-mono-tech text-xs text-white/30">${escapeHtml(levelId)}</span>
-        </div>
-        <p class="text-white/50 text-xs line-clamp-2">${escapeHtml(description)}</p>
-      </div>
-    `;
-
-    if (item.link) {
-      card.addEventListener('click', () => {
-        window.open(item.link, '_blank', 'noopener,noreferrer');
-      });
-    }
-
-    container.appendChild(card);
-  });
 }
-
 
 // ==========================================
 // CREATE ADMIN PANEL
