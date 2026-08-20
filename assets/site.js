@@ -1142,7 +1142,13 @@ function renderPublicGdLevels(items) {
 
   items.forEach((item, index) => {
     const card = document.createElement('div');
-    card.className = 'group relative bg-[#111114] border border-white/10 overflow-hidden cursor-pointer hover:border-[#FF9E00]/50 transition-all duration-300';
+
+    // --- ADDED HERE ---
+    const isBot = item.is_bot || item.source === 'bot';
+    const cardClass = isBot ? 'level-item bot-level-card' : 'level-item';
+
+    // Combine your existing Tailwind classes with cardClass
+    card.className = `${cardClass} group relative bg-[#111114] border border-white/10 overflow-hidden cursor-pointer hover:border-[#FF9E00]/50 transition-all duration-300`;
 
     const image = item.image || './assets/embedded-image-1.jpg';
     const title = item.title || 'Untitled Level';
