@@ -332,6 +332,75 @@ function escapeHtml(value) {
 
 
 // ==========================================
+// GD LEVEL RATING HELPER
+// ==========================================
+
+function getGdLevelRatingLabel(item) {
+  if (!item) return 'Unrated';
+
+  const epic =
+    Number(
+      item.epic ||
+      item.isEpic ||
+      item.epic_status ||
+      0
+    );
+
+  if (epic === 3) {
+    return 'Mythic';
+  }
+
+  if (epic === 2) {
+    return 'Legendary';
+  }
+
+  if (
+    epic === 1 ||
+    item.epic === true ||
+    item.isEpic === true ||
+    String(item.difficulty || '').toLowerCase().includes('epic') ||
+    String(item.status || '').toLowerCase().includes('epic')
+  ) {
+    return 'Epic';
+  }
+
+  const featured =
+    Boolean(
+      item.featured ||
+      item.isFeatured ||
+      (
+        item.featuredScore &&
+        Number(item.featuredScore) > 0
+      ) ||
+      String(item.difficulty || '').toLowerCase().includes('featured') ||
+      String(item.status || '').toLowerCase().includes('featured')
+    );
+
+  if (featured) {
+    return 'Featured';
+  }
+
+  const stars =
+    Number(
+      item.stars ||
+      item.star_count ||
+      item.stars_count ||
+      0
+    );
+
+  if (
+    stars > 0 ||
+    item.has_stars ||
+    String(item.difficulty || '').toLowerCase().includes('rated')
+  ) {
+    return 'Rated';
+  }
+
+  return 'Unrated';
+}
+
+
+// ==========================================
 // ADMIN TOKEN
 // ==========================================
 
@@ -1132,13 +1201,106 @@ async function loadGdLevels() {
 // ==========================================
 
 function renderPublicGdLevels(items) {
-  // Clear grid container to only show the table view
   const archive = document.getElementById('archive');
-  if (archive) {
-    const grid = archive.querySelector('.grid, .syx-archive-grid');
-    if (grid) grid.innerHTML = '';
+  if (!archive) return;
+
+  const grid = archive.querySelector('.grid, .syx-archive-grid');
+  if (grid) grid.innerHTML = '';
+
+  let container = archive.querySelector('.syx-gd-levels-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'syx-gd-levels-container mt-12 overflow-x-auto';
+    archive.appendChild(container);
   }
+
+  if (!items || !items.length) {
+    container.innerHTML = `
+      <div class="text-center py-12 text-white/30 font-mono-tech text-xs">
+        NO GEOMETRY DASH LEVELS ARCHIVED YET.
+      </div>
+    `;
+    return;
+  }
+
+  const rowsHtml = items.map((item, index) => {
+    const ratingLabel = getGdLevelRatingLabel(item);
+    const title = item.title || 'Untitled Level';
+    const levelId = item.level_id || '';
+    const difficulty = item.difficulty || '';
+    const description = item.description || '';
+    const link = item.link || '';
+
+    return `
+      <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
+        <td class="py-4 px-4 font-mono-tech text-xs text-white/30">
+          ${String(index + 1).padStart(2, '0')}
+        </td>
+        <td class="py-4 px-4">
+          <div class="font-heading font-bold text-white text-base md:text-lg group-hover:text-[#FF9E00] transition-colors">
+            ${escapeHtml(title)}
+          </div>
+          ${description ? `<div class="text-xs text-white/40 mt-1 line-clamp-1">${escapeHtml(description)}</div>` : ''}
+        </td>
+        <td class="py-4 px-4 font-mono-tech text-xs text-white/60">
+          ${escapeHtml(difficulty || '—')}
+        </td>
+        <td class="py-4 px-4">
+          <span class="inline-block px-2 py-1 font-mono-tech text-[10px] uppercase tracking-wider rounded border ${
+            ratingLabel === 'Epic' || ratingLabel === 'Legendary' || ratingLabel === 'Mythic'
+              ? 'border-[#00f5ff]/40 text-[#00f5ff] bg-[#00f5ff]/10'
+              : ratingLabel === 'Featured'
+              ? 'border-[#FF9E00]/40 text-[#FF9E00] bg-[#FF9E00]/10'
+              : ratingLabel === 'Rated'
+              ? 'border-yellow-500/40 text-yellow-400 bg-yellow-500/10'
+              : 'border-white/20 text-white/40 bg-white/5'
+          }">
+            ${escapeHtml(ratingLabel)}
+          </span>
+        </td>
+        <td class="py-4 px-4 font-mono-tech text-xs text-white/40">
+          ${levelId ? escapeHtml(levelId) : '—'}
+        </td>
+        <td class="py-4 px-4 text-right">
+          ${
+            link
+              ? `
+                <a
+                  href="${escapeHtml(link)}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-white/10 text-white/60 hover:border-[#FF9E00] hover:text-[#FF9E00] transition-colors"
+                  title="View Level"
+                >
+                  ↗
+                </a>
+              `
+              : ''
+          }
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <table class="w-full text-left border-collapse">
+      <thead>
+        <tr class="border-b border-white/10 font-mono-tech text-xs text-white/40 uppercase tracking-widest">
+          <th class="py-3 px-4 w-12">#</th>
+          <th class="py-3 px-4">Level</th>
+          <th class="py-3 px-4">Difficulty</th>
+          <th class="py-3 px-4">Rating</th>
+          <th class="py-3 px-4">ID</th>
+          <th class="py-3 px-4 text-right">Link</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+  `;
 }
+
 
 // ==========================================
 // CREATE ADMIN PANEL
@@ -3319,6 +3481,7 @@ function renderAdminGdLevels() {
     card.className = 'syx-showcase-admin-card';
 
     const image = item.image || '';
+    const ratingLabel = getGdLevelRatingLabel(item);
 
     card.innerHTML = `
       <div class="syx-showcase-admin-number">
@@ -3352,7 +3515,7 @@ function renderAdminGdLevels() {
         </div>
 
         <div class="syx-showcase-admin-category">
-          ${escapeHtml(item.difficulty || 'Featured')} ${item.level_id ? `· ID: ${escapeHtml(item.level_id)}` : ''}
+          ${escapeHtml(ratingLabel)}${item.difficulty ? ` · ${escapeHtml(item.difficulty)}` : ''} ${item.level_id ? `· ID: ${escapeHtml(item.level_id)}` : ''}
         </div>
 
         <div class="syx-showcase-admin-description">
@@ -3471,7 +3634,7 @@ function openGdLevelEditor(item = null) {
             id="gd-edit-difficulty"
             type="text"
             value="${escapeHtml(item?.difficulty || '')}"
-            placeholder="Extreme Demon / Unrated / Featured"
+            placeholder="Extreme Demon / Unrated / Featured / Epic"
           >
         </label>
 
