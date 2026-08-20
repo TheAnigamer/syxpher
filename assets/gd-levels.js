@@ -106,12 +106,13 @@
   function categoryLabel(level) {
     const type = String(level.sourceType || '').toLowerCase();
     const key = String(level.sourceKey || '').toLowerCase();
+    const author = String(level.author || level.creator || '').toLowerCase();
 
-    if (type === 'profile' && key === 'syxpher') {
+    if ((type === 'profile' && key === 'syxpher') || author === 'syxpher') {
       return 'Levels On My Account';
     }
 
-    if (type === 'profile' || type === 'list') {
+    if (type === 'profile' || type === 'list' || (author && author !== 'syxpher')) {
       return 'Levels On Other Accounts';
     }
 
@@ -119,34 +120,43 @@
   }
 
   function normalizeLevel(level) {
-    const difficulty = level && typeof level.difficulty === 'object' && level.difficulty !== null
-      ? level.difficulty
-      : {};
-    const ratings = level && typeof level.ratings === 'object' && level.ratings !== null
-      ? level.ratings
-      : {};
+    // Read stars from flat field or nested object
+    const rawStars = level?.stars ?? level?.difficulty?.stars ?? 0;
+    const parsedStars = Number.isFinite(Number(rawStars)) ? Number(rawStars) : 0;
+
+    const isDemon = Boolean(
+      level?.isDemon ||
+      level?.difficulty?.demon ||
+      parsedStars >= 10 ||
+      String(level?.difficulty || '').toLowerCase().includes('demon')
+    );
+
+    // Read ratings from flat fields or nested objects
+    const isEpic = Boolean(level?.epic || level?.ratings?.epic);
+    const isFeatured = Boolean(level?.featured || level?.ratings?.featured || parsedStars > 0);
+    const isRated = Boolean(level?.rated || level?.ratings?.rated || parsedStars > 0 || isFeatured || isEpic);
 
     return {
       ...level,
-      id: String(level && level.id != null ? level.id : ''),
-      name: String(level && level.name != null ? level.name : 'Untitled'),
-      author: String(level && level.author != null ? level.author : ''),
-      downloads: Number.isFinite(Number(level && level.downloads)) ? Number(level.downloads) : 0,
-      likes: Number.isFinite(Number(level && level.likes)) ? Number(level.likes) : 0,
+      id: String(level?.id || level?.level_id || ''),
+      name: String(level?.name || level?.title || 'Untitled'),
+      author: String(level?.author || level?.creator || ''),
+      downloads: Number.isFinite(Number(level?.downloads)) ? Number(level.downloads) : 0,
+      likes: Number.isFinite(Number(level?.likes)) ? Number(level.likes) : 0,
       difficulty: {
-        stars: Number.isFinite(Number(difficulty.stars)) ? Number(difficulty.stars) : 0,
-        coins: Number.isFinite(Number(difficulty.coins)) ? Number(difficulty.coins) : 0,
-        demon: Boolean(difficulty.demon),
-        auto: Boolean(difficulty.auto)
+        stars: parsedStars,
+        coins: Number.isFinite(Number(level?.coins || level?.difficulty?.coins)) ? Number(level?.coins || level?.difficulty?.coins) : 0,
+        demon: isDemon,
+        auto: Boolean(level?.auto || level?.difficulty?.auto)
       },
       ratings: {
-        rated: Boolean(ratings.rated),
-        featured: Boolean(ratings.featured),
-        epic: Boolean(ratings.epic)
+        rated: isRated,
+        featured: isFeatured,
+        epic: isEpic
       },
-      song: String(level && level.song != null ? level.song : ''),
-      sourceType: String(level && level.sourceType != null ? level.sourceType : ''),
-      sourceKey: String(level && level.sourceKey != null ? level.sourceKey : '')
+      song: String(level?.song || ''),
+      sourceType: String(level?.sourceType || ''),
+      sourceKey: String(level?.sourceKey || '')
     };
   }
 
