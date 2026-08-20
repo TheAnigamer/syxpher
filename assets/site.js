@@ -1149,22 +1149,23 @@ function renderPublicGdLevels(items) {
   const archive = document.getElementById('archive');
   if (!archive) return;
 
-  // Target the existing tbody directly inside your HTML table
-  const tbody = archive.querySelector('tbody');
-  if (!tbody) return;
+  // Clear out any existing static/duplicate table inside #archive first
+  archive.innerHTML = '';
+
+  const container = document.createElement('div');
+  container.className = 'syx-gd-levels-container mt-12 overflow-x-auto';
+  archive.appendChild(container);
 
   if (!items || !items.length) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="6" class="text-center py-12 text-white/30 font-mono-tech text-xs">
-          NO GEOMETRY DASH LEVELS ARCHIVED YET.
-        </td>
-      </tr>
+    container.innerHTML = `
+      <div class="text-center py-12 text-white/30 font-mono-tech text-xs">
+        NO GEOMETRY DASH LEVELS ARCHIVED YET.
+      </div>
     `;
     return;
   }
 
-  tbody.innerHTML = items.map((item, index) => {
+  const rowsHtml = items.map((item, index) => {
     const ratingLabel = getGdLevelRatingLabel(item);
     const title = item.title || 'Untitled Level';
     const levelId = item.level_id || '';
@@ -1224,6 +1225,24 @@ function renderPublicGdLevels(items) {
       </tr>
     `;
   }).join('');
+
+  container.innerHTML = `
+    <table class="w-full text-left border-collapse">
+      <thead>
+        <tr class="border-b border-white/10 font-mono-tech text-xs text-white/40 uppercase tracking-widest">
+          <th class="py-3 px-4 w-12">#</th>
+          <th class="py-3 px-4">Level</th>
+          <th class="py-3 px-4">Difficulty</th>
+          <th class="py-3 px-4">Rating</th>
+          <th class="py-3 px-4">ID</th>
+          <th class="py-3 px-4 text-right">Link</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+  `;
 }
 
 // ==========================================
