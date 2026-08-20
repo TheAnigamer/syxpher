@@ -1153,7 +1153,6 @@ function renderPublicGdLevels(items) {
     
     const stars = l.difficulty?.stars ?? l.stars ?? 0;
     const diffName = l.difficulty?.name || (stars > 0 ? `${stars} Stars` : 'Unrated');
-    const isDemon = l.difficulty?.demon || stars === 10;
     const diffIcon = stars > 0 ? '★' : '⚙';
 
     const isRated = stars > 0 || l.status === 'RATED';
@@ -1168,8 +1167,8 @@ function renderPublicGdLevels(items) {
         <td><strong>${name}</strong></td>
         <td>${id}</td>
         <td>${author}</td>
-        <td>${diffIcon}<br>${diffName}</td>
-        <td><span class="status-pill">${statusText}</span></td>
+        <td>${diffIcon} ${diffName}</td>
+        <td>${statusText}</td>
         <td>${category}</td>
         <td>
           <a href="https://gdbrowser.com/${id}" target="_blank" rel="noopener">
