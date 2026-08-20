@@ -106,88 +106,47 @@
   function categoryLabel(level) {
     const type = String(level.sourceType || '').toLowerCase();
     const key = String(level.sourceKey || '').toLowerCase();
-    const author = String(level.author || level.creator || '').toLowerCase();
 
-    if ((type === 'profile' && key === 'syxpher') || author === 'syxpher') {
+    if (type === 'profile' && key === 'syxpher') {
       return 'Levels On My Account';
     }
 
-    if (type === 'profile' || type === 'list' || (author && author !== 'syxpher')) {
+    if (type === 'profile' || type === 'list') {
       return 'Levels On Other Accounts';
     }
 
     return "Levels I've Built On";
   }
 
-  function extractStars(level) {
-    const candidates = [
-      level?.stars,
-      level?.star_count,
-      level?.difficulty?.stars,
-      level?.difficulty
-    ];
-
-    for (const val of candidates) {
-      if (val !== null && val !== undefined) {
-        const num = Number(val);
-        if (Number.isFinite(num) && num > 0) return num;
-
-        if (typeof val === 'string') {
-          const match = val.match(/\d+/);
-          if (match) return parseInt(match[0], 10);
-        }
-      }
-    }
-    return 0;
-  }
-
-  function isTruthyFlag(val) {
-    if (!val) return false;
-    if (typeof val === 'boolean') return val;
-    if (typeof val === 'number') return val > 0;
-    if (typeof val === 'string') {
-      const s = val.trim().toLowerCase();
-      return s === 'true' || s === '1' || (Number(s) > 0);
-    }
-    return false;
-  }
-
   function normalizeLevel(level) {
-    const parsedStars = extractStars(level);
-    const statusStr = String(
-      level?.status || level?.rating || level?.type || level?.tier || level?.badge || ''
-    ).toLowerCase();
-
-    const rawEpic = level?.epic ?? level?.isEpic ?? level?.is_epic ?? level?.epicScore ?? level?.ratings?.epic;
-    const isEpic = isTruthyFlag(rawEpic) || statusStr.includes('epic') || statusStr.includes('legendary') || statusStr.includes('mythic');
-
-    const rawFeatured = level?.featured ?? level?.isFeatured ?? level?.is_featured ?? level?.featuredScore ?? level?.featured_score ?? level?.ratings?.featured;
-    const isFeatured = isTruthyFlag(rawFeatured) || statusStr.includes('feature');
-
-    const rawRated = level?.rated ?? level?.isRated ?? level?.is_rated ?? level?.ratings?.rated;
-    const isRated = isTruthyFlag(rawRated) || parsedStars > 0 || isFeatured || isEpic || statusStr.includes('rate');
+    const difficulty = level && typeof level.difficulty === 'object' && level.difficulty !== null
+      ? level.difficulty
+      : {};
+    const ratings = level && typeof level.ratings === 'object' && level.ratings !== null
+      ? level.ratings
+      : {};
 
     return {
       ...level,
-      id: String(level?.id || level?.level_id || ''),
-      name: String(level?.name || level?.title || 'Untitled'),
-      author: String(level?.author || level?.creator || ''),
-      downloads: Number.isFinite(Number(level?.downloads)) ? Number(level.downloads) : 0,
-      likes: Number.isFinite(Number(level?.likes)) ? Number(level.likes) : 0,
+      id: String(level && level.id != null ? level.id : ''),
+      name: String(level && level.name != null ? level.name : 'Untitled'),
+      author: String(level && level.author != null ? level.author : ''),
+      downloads: Number.isFinite(Number(level && level.downloads)) ? Number(level.downloads) : 0,
+      likes: Number.isFinite(Number(level && level.likes)) ? Number(level.likes) : 0,
       difficulty: {
-        stars: parsedStars,
-        coins: Number.isFinite(Number(level?.coins || level?.difficulty?.coins)) ? Number(level?.coins || level?.difficulty?.coins) : 0,
-        demon: isTruthyFlag(level?.isDemon) || isTruthyFlag(level?.difficulty?.demon) || parsedStars >= 10,
-        auto: isTruthyFlag(level?.auto) || isTruthyFlag(level?.difficulty?.auto)
+        stars: Number.isFinite(Number(difficulty.stars)) ? Number(difficulty.stars) : 0,
+        coins: Number.isFinite(Number(difficulty.coins)) ? Number(difficulty.coins) : 0,
+        demon: Boolean(difficulty.demon),
+        auto: Boolean(difficulty.auto)
       },
       ratings: {
-        rated: isRated,
-        featured: isFeatured,
-        epic: isEpic
+        rated: Boolean(ratings.rated),
+        featured: Boolean(ratings.featured),
+        epic: Boolean(ratings.epic)
       },
-      song: String(level?.song || ''),
-      sourceType: String(level?.sourceType || ''),
-      sourceKey: String(level?.sourceKey || '')
+      song: String(level && level.song != null ? level.song : ''),
+      sourceType: String(level && level.sourceType != null ? level.sourceType : ''),
+      sourceKey: String(level && level.sourceKey != null ? level.sourceKey : '')
     };
   }
 
@@ -297,7 +256,7 @@
       case 'featured':
         return level.ratings.featured;
       case 'unrated':
-        return !level.ratings.rated && !level.ratings.featured && !level.ratings.epic;
+        return !level.ratings.rated;
       case 'rated':
         return level.ratings.rated;
       case 'epic':
@@ -396,15 +355,16 @@
       }
 
       const data = await res.json();
-      const rawLevels = Array.isArray(data) ? data : (data?.levels || []);
 
-      if (!Array.isArray(rawLevels)) {
+      if (!data || data.success !== true) {
+        throw new Error('The levels API returned an unsuccessful response.');
+      }
+
+      if (!Array.isArray(data.levels)) {
         throw new Error('The levels API response is missing the expected levels array.');
       }
 
-      console.log('API Raw Levels Data:', rawLevels);
-
-      const levels = rawLevels.map(normalizeLevel);
+      const levels = data.levels.map(normalizeLevel);
       setupLevelControls(levels);
     } catch (err) {
       console.error('Failed to load Geometry Dash levels:', err);
