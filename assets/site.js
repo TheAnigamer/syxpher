@@ -1204,18 +1204,15 @@ function renderPublicGdLevels(items) {
   const archive = document.getElementById('archive');
   if (!archive) return;
 
-  const grid = archive.querySelector('.grid, .syx-archive-grid');
-  if (grid) grid.innerHTML = '';
+  const targetContainer = archive.querySelector('.grid, .syx-archive-grid') || archive;
 
-  let container = archive.querySelector('.syx-gd-levels-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.className = 'syx-gd-levels-container mt-12 overflow-x-auto';
-    archive.appendChild(container);
+  const oldContainer = archive.querySelector('.syx-gd-levels-container');
+  if (oldContainer && oldContainer !== targetContainer) {
+    oldContainer.remove();
   }
 
   if (!items || !items.length) {
-    container.innerHTML = `
+    targetContainer.innerHTML = `
       <div class="text-center py-12 text-white/30 font-mono-tech text-xs">
         NO GEOMETRY DASH LEVELS ARCHIVED YET.
       </div>
@@ -1282,22 +1279,24 @@ function renderPublicGdLevels(items) {
     `;
   }).join('');
 
-  container.innerHTML = `
-    <table class="w-full text-left border-collapse">
-      <thead>
-        <tr class="border-b border-white/10 font-mono-tech text-xs text-white/40 uppercase tracking-widest">
-          <th class="py-3 px-4 w-12">#</th>
-          <th class="py-3 px-4">Level</th>
-          <th class="py-3 px-4">Difficulty</th>
-          <th class="py-3 px-4">Rating</th>
-          <th class="py-3 px-4">ID</th>
-          <th class="py-3 px-4 text-right">Link</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rowsHtml}
-      </tbody>
-    </table>
+  targetContainer.innerHTML = `
+    <div class="overflow-x-auto mt-12">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="border-b border-white/10 font-mono-tech text-xs text-white/40 uppercase tracking-widest">
+            <th class="py-3 px-4 w-12">#</th>
+            <th class="py-3 px-4">Level</th>
+            <th class="py-3 px-4">Difficulty</th>
+            <th class="py-3 px-4">Rating</th>
+            <th class="py-3 px-4">ID</th>
+            <th class="py-3 px-4 text-right">Link</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    </div>
   `;
 }
 
