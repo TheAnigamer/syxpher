@@ -338,22 +338,11 @@ function escapeHtml(value) {
 function getGdLevelRatingLabel(item) {
   if (!item) return 'Unrated';
 
-  const epic =
-    Number(
-      item.epic ||
-      item.isEpic ||
-      item.epic_status ||
-      0
-    );
+  // Extract epic rating safely (0 = None, 1 = Epic, 2 = Legendary, 3 = Mythic)
+  const epic = Number(item.epic ?? item.epic_status ?? (item.isEpic ? 1 : 0));
 
-  if (epic === 3) {
-    return 'Mythic';
-  }
-
-  if (epic === 2) {
-    return 'Legendary';
-  }
-
+  if (epic === 3) return 'Mythic';
+  if (epic === 2) return 'Legendary';
   if (
     epic === 1 ||
     item.epic === true ||
@@ -364,35 +353,19 @@ function getGdLevelRatingLabel(item) {
     return 'Epic';
   }
 
-  const featured =
-    Boolean(
-      item.featured ||
-      item.isFeatured ||
-      (
-        item.featuredScore &&
-        Number(item.featuredScore) > 0
-      ) ||
-      String(item.difficulty || '').toLowerCase().includes('featured') ||
-      String(item.status || '').toLowerCase().includes('featured')
-    );
+  const featured = Boolean(
+    item.featured ||
+    item.isFeatured ||
+    (item.featuredScore && Number(item.featuredScore) > 0) ||
+    String(item.difficulty || '').toLowerCase().includes('featured') ||
+    String(item.status || '').toLowerCase().includes('featured')
+  );
 
-  if (featured) {
-    return 'Featured';
-  }
+  if (featured) return 'Featured';
 
-  const stars =
-    Number(
-      item.stars ||
-      item.star_count ||
-      item.stars_count ||
-      0
-    );
+  const stars = Number(item.stars ?? item.star_count ?? item.stars_count ?? 0);
 
-  if (
-    stars > 0 ||
-    item.has_stars ||
-    String(item.difficulty || '').toLowerCase().includes('rated')
-  ) {
+  if (stars > 0 || item.has_stars || String(item.difficulty || '').toLowerCase().includes('rated')) {
     return 'Rated';
   }
 
