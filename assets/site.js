@@ -885,19 +885,16 @@ let gdLevels = [];
 
 async function loadGDLevels() {
   try {
-    const response = await fetch(
-      'https://syxpher.krewtoons10anigamer.workers.dev/tracked-levels.json',
-      { cache: 'no-store' }
-    );
+    const response = await fetch('/tracked-levels.json', { cache: 'no-store' });
 
     if (!response.ok) {
-      throw new Error(`Levels API returned ${response.status}`);
+      throw new Error(`HTTP error! Status: ${response.status}`);
     }
 
     gdLevels = await response.json();
 
-    // Call your render function if you have one, e.g.:
-    // renderGDArchive(gdLevels);
+    // Call your render function to draw the levels on the screen:
+    renderLevels(); 
 
   } catch (error) {
     console.error('Failed to load tracked levels:', error);
