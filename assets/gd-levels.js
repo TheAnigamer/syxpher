@@ -154,11 +154,19 @@
 
   function normalizeLevel(level) {
     const parsedStars = extractStars(level);
-    const statusStr = String(level?.status || level?.rating || '').toLowerCase();
+    const statusStr = String(level?.status || level?.rating || level?.type || '').toLowerCase();
 
-    const isEpic = isTruthyFlag(level?.epic) || isTruthyFlag(level?.ratings?.epic) || statusStr.includes('epic');
-    const isFeatured = isTruthyFlag(level?.featured) || isTruthyFlag(level?.ratings?.featured) || statusStr.includes('feature');
-    const isRated = isTruthyFlag(level?.rated) || isTruthyFlag(level?.ratings?.rated) || parsedStars > 0 || isFeatured || isEpic || statusStr.includes('rate');
+    // Check all common field variations for Epic
+    const rawEpic = level?.epic ?? level?.isEpic ?? level?.is_epic ?? level?.epicScore ?? level?.ratings?.epic;
+    const isEpic = isTruthyFlag(rawEpic) || statusStr.includes('epic') || statusStr.includes('legendary') || statusStr.includes('mythic');
+
+    // Check all common field variations for Featured
+    const rawFeatured = level?.featured ?? level?.isFeatured ?? level?.is_featured ?? level?.featuredScore ?? level?.featured_score ?? level?.ratings?.featured;
+    const isFeatured = isTruthyFlag(rawFeatured) || statusStr.includes('feature');
+
+    // Rated if explicitly rated, has stars, or is featured/epic
+    const rawRated = level?.rated ?? level?.isRated ?? level?.is_rated ?? level?.ratings?.rated;
+    const isRated = isTruthyFlag(rawRated) || parsedStars > 0 || isFeatured || isEpic || statusStr.includes('rate');
 
     return {
       ...level,
@@ -182,6 +190,23 @@
       sourceType: String(level?.sourceType || ''),
       sourceKey: String(level?.sourceKey || '')
     };
+  }
+
+  function matchesFilter(level, filter) {
+    switch (filter) {
+      case 'featured':
+        return level.ratings.featured;
+      case 'unrated':
+        return !level.ratings.rated && !level.ratings.featured && !level.ratings.epic;
+      case 'rated':
+        return level.ratings.rated;
+      case 'epic':
+        return level.ratings.epic;
+      case 'all':
+      default:
+        return true;
+    }
+  }
   }
 
   function buildRow(level, index) {
