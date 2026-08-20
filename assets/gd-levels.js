@@ -154,17 +154,16 @@
 
   function normalizeLevel(level) {
     const parsedStars = extractStars(level);
-    const statusStr = String(level?.status || level?.rating || level?.type || '').toLowerCase();
+    const statusStr = String(
+      level?.status || level?.rating || level?.type || level?.tier || level?.badge || ''
+    ).toLowerCase();
 
-    // Check all common field variations for Epic
     const rawEpic = level?.epic ?? level?.isEpic ?? level?.is_epic ?? level?.epicScore ?? level?.ratings?.epic;
     const isEpic = isTruthyFlag(rawEpic) || statusStr.includes('epic') || statusStr.includes('legendary') || statusStr.includes('mythic');
 
-    // Check all common field variations for Featured
     const rawFeatured = level?.featured ?? level?.isFeatured ?? level?.is_featured ?? level?.featuredScore ?? level?.featured_score ?? level?.ratings?.featured;
     const isFeatured = isTruthyFlag(rawFeatured) || statusStr.includes('feature');
 
-    // Rated if explicitly rated, has stars, or is featured/epic
     const rawRated = level?.rated ?? level?.isRated ?? level?.is_rated ?? level?.ratings?.rated;
     const isRated = isTruthyFlag(rawRated) || parsedStars > 0 || isFeatured || isEpic || statusStr.includes('rate');
 
@@ -402,6 +401,8 @@
       if (!Array.isArray(rawLevels)) {
         throw new Error('The levels API response is missing the expected levels array.');
       }
+
+      console.log('API Raw Levels Data:', rawLevels);
 
       const levels = rawLevels.map(normalizeLevel);
       setupLevelControls(levels);
