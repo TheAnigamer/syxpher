@@ -338,22 +338,11 @@ function escapeHtml(value) {
 function getGdLevelRatingLabel(item) {
   if (!item) return 'Unrated';
 
-  const epic =
-    Number(
-      item.epic ||
-      item.isEpic ||
-      item.epic_status ||
-      0
-    );
+  // Extract epic rating safely (0 = None, 1 = Epic, 2 = Legendary, 3 = Mythic)
+  const epic = Number(item.epic ?? item.epic_status ?? (item.isEpic ? 1 : 0));
 
-  if (epic === 3) {
-    return 'Mythic';
-  }
-
-  if (epic === 2) {
-    return 'Legendary';
-  }
-
+  if (epic === 3) return 'Mythic';
+  if (epic === 2) return 'Legendary';
   if (
     epic === 1 ||
     item.epic === true ||
@@ -364,35 +353,19 @@ function getGdLevelRatingLabel(item) {
     return 'Epic';
   }
 
-  const featured =
-    Boolean(
-      item.featured ||
-      item.isFeatured ||
-      (
-        item.featuredScore &&
-        Number(item.featuredScore) > 0
-      ) ||
-      String(item.difficulty || '').toLowerCase().includes('featured') ||
-      String(item.status || '').toLowerCase().includes('featured')
-    );
+  const featured = Boolean(
+    item.featured ||
+    item.isFeatured ||
+    (item.featuredScore && Number(item.featuredScore) > 0) ||
+    String(item.difficulty || '').toLowerCase().includes('featured') ||
+    String(item.status || '').toLowerCase().includes('featured')
+  );
 
-  if (featured) {
-    return 'Featured';
-  }
+  if (featured) return 'Featured';
 
-  const stars =
-    Number(
-      item.stars ||
-      item.star_count ||
-      item.stars_count ||
-      0
-    );
+  const stars = Number(item.stars ?? item.star_count ?? item.stars_count ?? 0);
 
-  if (
-    stars > 0 ||
-    item.has_stars ||
-    String(item.difficulty || '').toLowerCase().includes('rated')
-  ) {
+  if (stars > 0 || item.has_stars || String(item.difficulty || '').toLowerCase().includes('rated')) {
     return 'Rated';
   }
 
@@ -1204,15 +1177,18 @@ function renderPublicGdLevels(items) {
   const archive = document.getElementById('archive');
   if (!archive) return;
 
-  const targetContainer = archive.querySelector('.grid, .syx-archive-grid') || archive;
+  const grid = archive.querySelector('.grid, .syx-archive-grid');
+  if (grid) grid.innerHTML = '';
 
-  const oldContainer = archive.querySelector('.syx-gd-levels-container');
-  if (oldContainer && oldContainer !== targetContainer) {
-    oldContainer.remove();
+  let container = archive.querySelector('.syx-gd-levels-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'syx-gd-levels-container mt-12 overflow-x-auto';
+    archive.appendChild(container);
   }
 
   if (!items || !items.length) {
-    targetContainer.innerHTML = `
+    container.innerHTML = `
       <div class="text-center py-12 text-white/30 font-mono-tech text-xs">
         NO GEOMETRY DASH LEVELS ARCHIVED YET.
       </div>
@@ -1279,24 +1255,22 @@ function renderPublicGdLevels(items) {
     `;
   }).join('');
 
-  targetContainer.innerHTML = `
-    <div class="overflow-x-auto mt-12">
-      <table class="w-full text-left border-collapse">
-        <thead>
-          <tr class="border-b border-white/10 font-mono-tech text-xs text-white/40 uppercase tracking-widest">
-            <th class="py-3 px-4 w-12">#</th>
-            <th class="py-3 px-4">Level</th>
-            <th class="py-3 px-4">Difficulty</th>
-            <th class="py-3 px-4">Rating</th>
-            <th class="py-3 px-4">ID</th>
-            <th class="py-3 px-4 text-right">Link</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rowsHtml}
-        </tbody>
-      </table>
-    </div>
+  container.innerHTML = `
+    <table class="w-full text-left border-collapse">
+      <thead>
+        <tr class="border-b border-white/10 font-mono-tech text-xs text-white/40 uppercase tracking-widest">
+          <th class="py-3 px-4 w-12">#</th>
+          <th class="py-3 px-4">Level</th>
+          <th class="py-3 px-4">Difficulty</th>
+          <th class="py-3 px-4">Rating</th>
+          <th class="py-3 px-4">ID</th>
+          <th class="py-3 px-4 text-right">Link</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
   `;
 }
 
