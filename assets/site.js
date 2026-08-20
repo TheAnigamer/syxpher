@@ -335,12 +335,67 @@ function escapeHtml(value) {
 // GD LEVEL RATING HELPER
 // ==========================================
 
-function getGdLevelRatingLabel(level) {
-  if (level.isMythic || level.mythic) return 'Mythic';
-  if (level.isLegendary || level.legendary) return 'Legendary';
-  if (level.isEpic || level.epic) return 'Epic';
-  if (level.isFeatured || level.featured) return 'Featured';
-  if (level.stars > 0 || level.isRated || level.rated) return 'Rated';
+function getGdLevelRatingLabel(item) {
+  if (!item) return 'Unrated';
+
+  const epic =
+    Number(
+      item.epic ||
+      item.isEpic ||
+      item.epic_status ||
+      0
+    );
+
+  if (epic === 3) {
+    return 'Mythic';
+  }
+
+  if (epic === 2) {
+    return 'Legendary';
+  }
+
+  if (
+    epic === 1 ||
+    item.epic === true ||
+    item.isEpic === true ||
+    String(item.difficulty || '').toLowerCase().includes('epic') ||
+    String(item.status || '').toLowerCase().includes('epic')
+  ) {
+    return 'Epic';
+  }
+
+  const featured =
+    Boolean(
+      item.featured ||
+      item.isFeatured ||
+      (
+        item.featuredScore &&
+        Number(item.featuredScore) > 0
+      ) ||
+      String(item.difficulty || '').toLowerCase().includes('featured') ||
+      String(item.status || '').toLowerCase().includes('featured')
+    );
+
+  if (featured) {
+    return 'Featured';
+  }
+
+  const stars =
+    Number(
+      item.stars ||
+      item.star_count ||
+      item.stars_count ||
+      0
+    );
+
+  if (
+    stars > 0 ||
+    item.has_stars ||
+    String(item.difficulty || '').toLowerCase().includes('rated')
+  ) {
+    return 'Rated';
+  }
+
   return 'Unrated';
 }
 
@@ -1149,12 +1204,15 @@ function renderPublicGdLevels(items) {
   const archive = document.getElementById('archive');
   if (!archive) return;
 
-  // Clear out any existing static/duplicate table inside #archive first
-  archive.innerHTML = '';
+  const grid = archive.querySelector('.grid, .syx-archive-grid');
+  if (grid) grid.innerHTML = '';
 
-  const container = document.createElement('div');
-  container.className = 'syx-gd-levels-container mt-12 overflow-x-auto';
-  archive.appendChild(container);
+  let container = archive.querySelector('.syx-gd-levels-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'syx-gd-levels-container mt-12 overflow-x-auto';
+    archive.appendChild(container);
+  }
 
   if (!items || !items.length) {
     container.innerHTML = `
@@ -1173,16 +1231,6 @@ function renderPublicGdLevels(items) {
     const description = item.description || '';
     const link = item.link || '';
 
-    const normalizedRating = ratingLabel.toLowerCase();
-    const badgeStyle = 
-      ['epic', 'legendary', 'mythic'].includes(normalizedRating)
-        ? 'border-[#00f5ff]/40 text-[#00f5ff] bg-[#00f5ff]/10'
-        : normalizedRating === 'featured'
-        ? 'border-[#FF9E00]/40 text-[#FF9E00] bg-[#FF9E00]/10'
-        : normalizedRating === 'rated'
-        ? 'border-yellow-500/40 text-yellow-400 bg-yellow-500/10'
-        : 'border-white/20 text-white/40 bg-white/5';
-
     return `
       <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
         <td class="py-4 px-4 font-mono-tech text-xs text-white/30">
@@ -1198,7 +1246,15 @@ function renderPublicGdLevels(items) {
           ${escapeHtml(difficulty || '—')}
         </td>
         <td class="py-4 px-4">
-          <span class="inline-block px-2 py-1 font-mono-tech text-[10px] uppercase tracking-wider rounded border ${badgeStyle}">
+          <span class="inline-block px-2 py-1 font-mono-tech text-[10px] uppercase tracking-wider rounded border ${
+            ratingLabel === 'Epic' || ratingLabel === 'Legendary' || ratingLabel === 'Mythic'
+              ? 'border-[#00f5ff]/40 text-[#00f5ff] bg-[#00f5ff]/10'
+              : ratingLabel === 'Featured'
+              ? 'border-[#FF9E00]/40 text-[#FF9E00] bg-[#FF9E00]/10'
+              : ratingLabel === 'Rated'
+              ? 'border-yellow-500/40 text-yellow-400 bg-yellow-500/10'
+              : 'border-white/20 text-white/40 bg-white/5'
+          }">
             ${escapeHtml(ratingLabel)}
           </span>
         </td>
@@ -1244,6 +1300,7 @@ function renderPublicGdLevels(items) {
     </table>
   `;
 }
+
 
 // ==========================================
 // CREATE ADMIN PANEL
