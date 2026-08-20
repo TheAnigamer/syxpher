@@ -1,5 +1,5 @@
 (() => {
-  const API_URL = '/api/levels';
+  const API_URL = '/tracked-levels.json';
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
   const STAR_PATH =
@@ -104,7 +104,7 @@
   }
 
   function categoryLabel(level) {
-    const type = String(level.sourceType || '').toLowerCase();
+    const type = String(level.sourceType || level.source || '').toLowerCase();
     const key = String(level.sourceKey || '').toLowerCase();
 
     if (type === 'profile' && key === 'syxpher') {
@@ -119,34 +119,48 @@
   }
 
   function normalizeLevel(level) {
-    const difficulty = level && typeof level.difficulty === 'object' && level.difficulty !== null
-      ? level.difficulty
-      : {};
-    const ratings = level && typeof level.ratings === 'object' && level.ratings !== null
-      ? level.ratings
-      : {};
+    if (!level || typeof level !== 'object') level = {};
+
+    const diffObj = typeof level.difficulty === 'object' && level.difficulty !== null ? level.difficulty : {};
+    const ratingsObj = typeof level.ratings === 'object' && level.ratings !== null ? level.ratings : {};
+
+    let stars = Number.isFinite(Number(diffObj.stars)) ? Number(diffObj.stars) : 0;
+    let demon = Boolean(diffObj.demon);
+
+    const diffStr = String(level.difficulty || level.rating || '').toLowerCase();
+    if (diffStr.includes('demon')) demon = true;
+    const starMatch = diffStr.match(/(\d+)\s*star/i);
+    if (starMatch) {
+      stars = parseInt(starMatch[1], 10);
+    } else if (demon && stars === 0) {
+      stars = 10;
+    }
+
+    const isEpic = Boolean(ratingsObj.epic) || diffStr.includes('epic');
+    const isFeatured = Boolean(ratingsObj.featured) || diffStr.includes('featured');
+    const isRated = Boolean(ratingsObj.rated) || isEpic || isFeatured || stars > 0 || (diffStr !== 'unrated' && diffStr !== '');
 
     return {
       ...level,
-      id: String(level && level.id != null ? level.id : ''),
-      name: String(level && level.name != null ? level.name : 'Untitled'),
-      author: String(level && level.author != null ? level.author : ''),
-      downloads: Number.isFinite(Number(level && level.downloads)) ? Number(level.downloads) : 0,
-      likes: Number.isFinite(Number(level && level.likes)) ? Number(level.likes) : 0,
+      id: String(level.level_id || level.id || ''),
+      name: String(level.title || level.name || 'Untitled'),
+      author: String(level.creator || level.author || ''),
+      downloads: Number.isFinite(Number(level.downloads)) ? Number(level.downloads) : 0,
+      likes: Number.isFinite(Number(level.likes)) ? Number(level.likes) : 0,
       difficulty: {
-        stars: Number.isFinite(Number(difficulty.stars)) ? Number(difficulty.stars) : 0,
-        coins: Number.isFinite(Number(difficulty.coins)) ? Number(difficulty.coins) : 0,
-        demon: Boolean(difficulty.demon),
-        auto: Boolean(difficulty.auto)
+        stars: stars,
+        coins: Number.isFinite(Number(diffObj.coins)) ? Number(diffObj.coins) : 0,
+        demon: demon,
+        auto: Boolean(diffObj.auto)
       },
       ratings: {
-        rated: Boolean(ratings.rated),
-        featured: Boolean(ratings.featured),
-        epic: Boolean(ratings.epic)
+        rated: isRated,
+        featured: isFeatured,
+        epic: isEpic
       },
-      song: String(level && level.song != null ? level.song : ''),
-      sourceType: String(level && level.sourceType != null ? level.sourceType : ''),
-      sourceKey: String(level && level.sourceKey != null ? level.sourceKey : '')
+      song: String(level.song || ''),
+      sourceType: String(level.sourceType || level.source || ''),
+      sourceKey: String(level.sourceKey || '')
     };
   }
 
@@ -208,11 +222,14 @@
 
     const linkTd = document.createElement('td');
     linkTd.className = 'py-4 px-4 text-right';
+    const videoUrl = level.video || level.video_url || level.link;
+    const targetUrl = videoUrl || `https://gdbrowser.com/${encodeURIComponent(level.id)}`;
+
     const a = document.createElement('a');
     a.className =
       'inline-flex items-center justify-center w-9 h-9 text-white/30 hover:text-[#FF9E00] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9E00]';
     a.setAttribute('aria-label', `View ${level.name || 'level'} details`);
-    a.href = `https://gdbrowser.com/${encodeURIComponent(level.id)}`;
+    a.href = targetUrl;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     a.appendChild(makeIcon(EXTERNAL_LINK_PATHS));
@@ -355,16 +372,13 @@
       }
 
       const data = await res.json();
+      const rawLevels = Array.isArray(data) ? data : (data && Array.isArray(data.levels) ? data.levels : null);
 
-      if (!data || data.success !== true) {
-        throw new Error('The levels API returned an unsuccessful response.');
+      if (!rawLevels) {
+        throw new Error('API response did not return an array of levels.');
       }
 
-      if (!Array.isArray(data.levels)) {
-        throw new Error('The levels API response is missing the expected levels array.');
-      }
-
-      const levels = data.levels.map(normalizeLevel);
+      const levels = rawLevels.map(normalizeLevel);
       setupLevelControls(levels);
     } catch (err) {
       console.error('Failed to load Geometry Dash levels:', err);
