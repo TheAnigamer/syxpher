@@ -169,7 +169,7 @@ async function requireAdmin(request, env) {
 
 
 // ==========================================
-// SITE SETTINGS & GD LEVELS HELPERS
+// DB & MIGRATION HELPERS
 // ==========================================
 
 async function getSiteSettings(env) {
@@ -193,7 +193,7 @@ async function ensureLevelsTable(env) {
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS levels (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        level_id TEXT UNIQUE,
+        level_id TEXT,
         title TEXT,
         name TEXT,
         creator TEXT,
@@ -206,6 +206,26 @@ async function ensureLevelsTable(env) {
         is_deleted INTEGER DEFAULT 0
       )
     `).run();
+
+    // Auto-migrate missing columns for pre-existing tables
+    const extraCols = [
+      ["level_id", "TEXT"],
+      ["is_deleted", "INTEGER DEFAULT 0"],
+      ["sort_order", "INTEGER DEFAULT 0"],
+      ["video_url", "TEXT"],
+      ["link", "TEXT"],
+      ["difficulty", "TEXT"],
+      ["creator", "TEXT"],
+      ["description", "TEXT"]
+    ];
+
+    for (const [col, type] of extraCols) {
+      try {
+        await env.DB.prepare(`ALTER TABLE levels ADD COLUMN ${col} ${type}`).run();
+      } catch (e) {
+        // Column already exists
+      }
+    }
   } catch (e) {
     console.error("Could not initialize levels table:", e);
   }
@@ -221,8 +241,14 @@ async function getAllLevels(env) {
       { headers: { Accept: "application/json" } }
     );
     if (res.ok) {
-      botLevels = await res.json();
-      if (!Array.isArray(botLevels)) botLevels = [];
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        botLevels = data;
+      } else if (data && Array.isArray(data.levels)) {
+        botLevels = data.levels;
+      } else if (data && Array.isArray(data.data)) {
+        botLevels = data.data;
+      }
     }
   } catch (e) {
     console.error("Cloud Run GD fetch failed:", e);
@@ -237,24 +263,33 @@ async function getAllLevels(env) {
   }
 
   const d1ByLevelId = new Map();
+  const d1ById = new Map();
   const deletedSet = new Set();
 
   for (const row of d1Rows) {
-    if (row.is_deleted) {
-      if (row.level_id) deletedSet.add(String(row.level_id));
-      if (row.id) deletedSet.add(String(row.id));
+    const idKey = String(row.id);
+    const levelIdKey = row.level_id ? String(row.level_id) : "";
+
+    if (row.is_deleted === 1) {
+      if (levelIdKey) deletedSet.add(levelIdKey);
+      if (idKey) deletedSet.add(idKey);
       continue;
     }
-    if (row.level_id) d1ByLevelId.set(String(row.level_id), row);
+
+    if (levelIdKey) d1ByLevelId.set(levelIdKey, row);
+    if (idKey) d1ById.set(idKey, row);
   }
 
   const combined = [];
   const processedD1Ids = new Set();
 
   for (const botItem of botLevels) {
-    const levelIdStr = String(botItem.level_id || botItem.id || "");
+    const rawId = botItem.level_id || botItem.levelId || botItem.id || "";
+    const levelIdStr = String(rawId).trim();
 
-    if (deletedSet.has(levelIdStr)) continue;
+    if (levelIdStr && deletedSet.has(levelIdStr)) {
+      continue;
+    }
 
     if (levelIdStr && d1ByLevelId.has(levelIdStr)) {
       const d1Item = d1ByLevelId.get(levelIdStr);
@@ -275,7 +310,7 @@ async function getAllLevels(env) {
       });
     } else {
       combined.push({
-        id: botItem.id || levelIdStr,
+        id: levelIdStr || Date.now(),
         level_id: levelIdStr,
         title: botItem.title || botItem.name || "",
         name: botItem.name || botItem.title || "",
@@ -291,14 +326,7 @@ async function getAllLevels(env) {
   }
 
   for (const row of d1Rows) {
-    if (row.is_deleted || processedD1Ids.has(row.id)) continue;
-
-    if (
-      row.level_id &&
-      botLevels.some((b) => String(b.level_id || b.id) === String(row.level_id))
-    ) {
-      continue;
-    }
+    if (row.is_deleted === 1 || processedD1Ids.has(row.id)) continue;
 
     combined.push({
       id: row.id,
@@ -848,55 +876,54 @@ export default {
         await ensureLevelsTable(env);
         const body = await request.json();
 
-        const title = body.title || body.name || "";
-        if (!title && !body.level_id) {
+        const title = String(body.title || body.name || "");
+        const levelId = String(body.level_id || body.levelId || Date.now());
+
+        if (!title && !levelId) {
           return json({ error: "Title or Level ID is required" }, 400);
         }
+
+        const videoLink = String(body.video || body.video_url || body.youtube || body.link || "");
 
         const max = await env.DB.prepare(
           `SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM levels`
         ).first();
 
         const sortOrder = Number(max?.max_order || 0) + 1;
-        const videoLink = String(body.video || body.video_url || body.youtube || body.link || "");
-        const levelId = String(body.level_id || body.levelId || Date.now());
 
-        const result = await env.DB.prepare(
-          `INSERT INTO levels (
-             level_id, title, name, creator, description, video, video_url, link, difficulty, sort_order, is_deleted
-           )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-           ON CONFLICT(level_id) DO UPDATE SET
-             title = excluded.title,
-             name = excluded.name,
-             creator = excluded.creator,
-             description = excluded.description,
-             video = excluded.video,
-             video_url = excluded.video_url,
-             link = excluded.link,
-             difficulty = excluded.difficulty,
-             is_deleted = 0`
-        )
-          .bind(
-            levelId,
-            String(title),
-            String(title),
-            String(body.creator || body.author || ""),
-            String(body.description || ""),
-            videoLink,
-            videoLink,
-            String(body.link || videoLink),
-            String(body.difficulty || ""),
-            sortOrder
-          )
-          .run();
+        const existing = await env.DB.prepare(
+          `SELECT id FROM levels WHERE level_id = ?`
+        ).bind(levelId).first();
 
-        return json({
-          ok: true,
-          id: result.meta.last_row_id || levelId
-        });
+        if (existing) {
+          await env.DB.prepare(
+            `UPDATE levels SET
+               title = ?, name = ?, creator = ?, description = ?,
+               video = ?, video_url = ?, link = ?, difficulty = ?, is_deleted = 0
+             WHERE level_id = ?`
+          ).bind(
+            title, title, String(body.creator || body.author || ""),
+            String(body.description || ""), videoLink, videoLink,
+            String(body.link || videoLink), String(body.difficulty || ""), levelId
+          ).run();
+
+          return json({ ok: true, id: existing.id });
+        } else {
+          const result = await env.DB.prepare(
+            `INSERT INTO levels (
+               level_id, title, name, creator, description,
+               video, video_url, link, difficulty, sort_order, is_deleted
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
+          ).bind(
+            levelId, title, title, String(body.creator || body.author || ""),
+            String(body.description || ""), videoLink, videoLink,
+            String(body.link || videoLink), String(body.difficulty || ""), sortOrder
+          ).run();
+
+          return json({ ok: true, id: result.meta?.last_row_id || levelId });
+        }
       } catch (error) {
-        console.error(error);
+        console.error("Add level error:", error);
         return json({ error: "Could not create level" }, 500);
       }
     }
@@ -921,41 +948,41 @@ export default {
         const id = url.pathname.split("/").pop();
         const body = await request.json();
 
-        const title = body.title || body.name || "";
+        const title = String(body.title || body.name || "");
         const videoLink = String(body.video || body.video_url || body.youtube || body.link || "");
         const levelId = String(body.level_id || body.levelId || id);
 
-        await env.DB.prepare(
-          `INSERT INTO levels (
-             level_id, title, name, creator, description, video, video_url, link, difficulty, is_deleted
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-           ON CONFLICT(level_id) DO UPDATE SET
-             title = excluded.title,
-             name = excluded.name,
-             creator = excluded.creator,
-             description = excluded.description,
-             video = excluded.video,
-             video_url = excluded.video_url,
-             link = excluded.link,
-             difficulty = excluded.difficulty,
-             is_deleted = 0`
-        )
-          .bind(
-            levelId,
-            String(title),
-            String(title),
-            String(body.creator || body.author || ""),
-            String(body.description || ""),
-            videoLink,
-            videoLink,
-            String(body.link || videoLink),
-            String(body.difficulty || "")
-          )
-          .run();
+        const existing = await env.DB.prepare(
+          `SELECT id FROM levels WHERE level_id = ? OR id = ?`
+        ).bind(levelId, id).first();
+
+        if (existing) {
+          await env.DB.prepare(
+            `UPDATE levels SET
+               title = ?, name = ?, creator = ?, description = ?,
+               video = ?, video_url = ?, link = ?, difficulty = ?, is_deleted = 0
+             WHERE id = ?`
+          ).bind(
+            title, title, String(body.creator || body.author || ""),
+            String(body.description || ""), videoLink, videoLink,
+            String(body.link || videoLink), String(body.difficulty || ""), existing.id
+          ).run();
+        } else {
+          await env.DB.prepare(
+            `INSERT INTO levels (
+               level_id, title, name, creator, description,
+               video, video_url, link, difficulty, is_deleted
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
+          ).bind(
+            levelId, title, title, String(body.creator || body.author || ""),
+            String(body.description || ""), videoLink, videoLink,
+            String(body.link || videoLink), String(body.difficulty || "")
+          ).run();
+        }
 
         return json({ ok: true });
       } catch (error) {
-        console.error(error);
+        console.error("Edit level error:", error);
         return json({ error: "Could not update level" }, 500);
       }
     }
@@ -977,26 +1004,21 @@ export default {
 
       try {
         await ensureLevelsTable(env);
-        const id = url.pathname.split("/").pop();
+        const id = String(url.pathname.split("/").pop());
 
-        await env.DB.prepare(
-          `INSERT INTO levels (level_id, is_deleted) VALUES (?, 1)
-           ON CONFLICT(level_id) DO UPDATE SET is_deleted = 1`
-        )
-          .bind(String(id))
-          .run();
+        const existing = await env.DB.prepare(
+          `SELECT id FROM levels WHERE level_id = ? OR id = ?`
+        ).bind(id, id).first();
 
-        if (!isNaN(Number(id))) {
-          await env.DB.prepare(
-            `UPDATE levels SET is_deleted = 1 WHERE id = ?`
-          )
-            .bind(Number(id))
-            .run();
+        if (existing) {
+          await env.DB.prepare(`UPDATE levels SET is_deleted = 1 WHERE id = ?`).bind(existing.id).run();
+        } else {
+          await env.DB.prepare(`INSERT INTO levels (level_id, is_deleted) VALUES (?, 1)`).bind(id).run();
         }
 
         return json({ ok: true });
       } catch (error) {
-        console.error(error);
+        console.error("Delete level error:", error);
         return json({ error: "Could not delete level" }, 500);
       }
     }
@@ -1027,25 +1049,24 @@ export default {
           const idStr = String(body.ids[index]);
           const order = index + 1;
 
-          await env.DB.prepare(
-            `INSERT INTO levels (level_id, sort_order) VALUES (?, ?)
-             ON CONFLICT(level_id) DO UPDATE SET sort_order = excluded.sort_order`
-          )
-            .bind(idStr, order)
-            .run();
+          const existing = await env.DB.prepare(
+            `SELECT id FROM levels WHERE level_id = ? OR id = ?`
+          ).bind(idStr, idStr).first();
 
-          if (!isNaN(Number(idStr))) {
-            await env.DB.prepare(
-              `UPDATE levels SET sort_order = ? WHERE id = ?`
-            )
-              .bind(order, Number(idStr))
+          if (existing) {
+            await env.DB.prepare(`UPDATE levels SET sort_order = ? WHERE id = ?`)
+              .bind(order, existing.id)
+              .run();
+          } else {
+            await env.DB.prepare(`INSERT INTO levels (level_id, sort_order) VALUES (?, ?)`)
+              .bind(idStr, order)
               .run();
           }
         }
 
         return json({ ok: true });
       } catch (error) {
-        console.error(error);
+        console.error("Reorder error:", error);
         return json({ error: "Could not reorder levels" }, 500);
       }
     }
