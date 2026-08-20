@@ -1132,12 +1132,92 @@ async function loadGdLevels() {
 // ==========================================
 
 function renderPublicGdLevels(items) {
-  // Clear grid container to only show the table view
   const archive = document.getElementById('archive');
+  
+  // Clear grid container to only show the table view
   if (archive) {
     const grid = archive.querySelector('.grid, .syx-archive-grid');
     if (grid) grid.innerHTML = '';
   }
+
+  // Populate table view
+  const tbody = archive ? archive.querySelector('tbody') : document.querySelector('#archive tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+
+  if (!Array.isArray(items) || items.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="py-6 text-center text-white/30 font-mono text-xs">
+          NO LEVELS FOUND
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  items.forEach((item, index) => {
+    const row = document.createElement('tr');
+    row.className = 'border-b border-white/5 hover:bg-white/[0.02] transition-colors';
+
+    // 1. Index (formatted as 01, 02, etc.)
+    const indexStr = String(index + 1).padStart(2, '0');
+
+    // 2. Name
+    const name = item.name || item.title || 'Untitled';
+
+    // 3. Level ID (Only use explicit GD level IDs, ignore database primary keys like 3)
+    const levelId = item.level_id || item.levelId || item.gd_id || '—';
+
+    // 4. Author
+    const author = item.author || 'Unknown';
+
+    // 5. Difficulty
+    const difficulty = item.difficulty || 'Unrated';
+
+    // 6. Status Badge
+    const diffLower = String(difficulty).toLowerCase();
+    const isEpic = Boolean(item.epic || item.is_epic || diffLower.includes('epic'));
+    const isFeatured = Boolean(item.featured || item.is_featured || diffLower.includes('feature'));
+    const isRated = Boolean(item.rated || item.is_rated || (item.stars && item.stars > 0) || (!diffLower.includes('unrated') && diffLower !== ''));
+
+    let statusBadge = '<span class="px-2 py-0.5 border border-white/10 text-white/30 bg-white/5 font-mono text-[10px] tracking-wider uppercase">UNRATED</span>';
+    if (isEpic) {
+      statusBadge = '<span class="px-2 py-0.5 border border-amber-400/40 text-amber-400 bg-amber-400/10 font-mono text-[10px] tracking-wider uppercase">EPIC</span>';
+    } else if (isFeatured) {
+      statusBadge = '<span class="px-2 py-0.5 border border-[#00f5ff]/40 text-[#00f5ff] bg-[#00f5ff]/10 font-mono text-[10px] tracking-wider uppercase">FEATURED</span>';
+    } else if (isRated) {
+      statusBadge = '<span class="px-2 py-0.5 border border-emerald-500/40 text-emerald-400 bg-emerald-500/10 font-mono text-[10px] tracking-wider uppercase">RATED</span>';
+    }
+
+    // 7. Category
+    const category = item.category || '—';
+
+    // 8. Link
+    const link = item.link || item.videoUrl || item.url;
+
+    row.innerHTML = `
+      <td class="py-4 px-4 font-mono text-xs text-white/30">${indexStr}</td>
+      <td class="py-4 px-4 font-bold text-white text-sm">${escapeHtml(name)}</td>
+      <td class="py-4 px-4 font-mono text-xs text-white/50">${escapeHtml(String(levelId))}</td>
+      <td class="py-4 px-4 font-mono text-xs text-white/70">${escapeHtml(author)}</td>
+      <td class="py-4 px-4 font-mono text-xs text-amber-400/90">${escapeHtml(difficulty)}</td>
+      <td class="py-4 px-4">${statusBadge}</td>
+      <td class="py-4 px-4 font-mono text-xs text-white/50">${escapeHtml(category)}</td>
+      <td class="py-4 px-4 text-right">
+        ${link ? `
+          <a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-end text-white/30 hover:text-white transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+            </svg>
+          </a>
+        ` : '<span class="text-white/10">—</span>'}
+      </td>
+    `;
+
+    tbody.appendChild(row);
+  });
 }
 
 // ==========================================
