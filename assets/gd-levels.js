@@ -129,14 +129,38 @@
       return false;
     }
 
-  function normalizeLevel(level) {
-    const rawStars = level?.stars ?? level?.star_count ?? level?.difficulty?.stars ?? 0;
-    const parsedStars = Number.isFinite(Number(rawStars)) ? Number(rawStars) : 0;
+  function extractStars(level) {
+    if (typeof level?.stars === 'number') return level.stars;
+    if (typeof level?.stars === 'string' && !isNaN(parseFloat(level.stars))) return parseFloat(level.stars);
+    if (typeof level?.difficulty?.stars === 'number') return level.difficulty.stars;
+    if (typeof level?.difficulty === 'number') return level.difficulty;
+    
+    // Extract digit if difficulty is a string like "6 Stars" or "6"
+    if (typeof level?.difficulty === 'string') {
+      const match = level.difficulty.match(/\d+/);
+      if (match) return parseInt(match[0], 10);
+    }
+    return 0;
+  }
 
-    const isDemon = parseBool(level?.isDemon || level?.difficulty?.demon) || parsedStars >= 10;
-    const isEpic = parseBool(level?.epic || level?.ratings?.epic);
-    const isFeatured = parseBool(level?.featured || level?.ratings?.featured);
-    const isRated = parseBool(level?.rated || level?.ratings?.rated) || parsedStars > 0 || isFeatured || isEpic;
+  function isTruthyFlag(val) {
+    if (!val) return false;
+    if (typeof val === 'boolean') return val;
+    if (typeof val === 'number') return val > 0;
+    if (typeof val === 'string') {
+      const s = val.trim().toLowerCase();
+      return s === 'true' || s === '1' || (Number(s) > 0);
+    }
+    return false;
+  }
+
+  function normalizeLevel(level) {
+    const parsedStars = extractStars(level);
+    const statusStr = String(level?.status || level?.rating || '').toLowerCase();
+
+    const isEpic = isTruthyFlag(level?.epic) || isTruthyFlag(level?.ratings?.epic) || statusStr.includes('epic');
+    const isFeatured = isTruthyFlag(level?.featured) || isTruthyFlag(level?.ratings?.featured) || statusStr.includes('feature');
+    const isRated = isTruthyFlag(level?.rated) || isTruthyFlag(level?.ratings?.rated) || parsedStars > 0 || isFeatured || isEpic || statusStr.includes('rate');
 
     return {
       ...level,
@@ -148,8 +172,8 @@
       difficulty: {
         stars: parsedStars,
         coins: Number.isFinite(Number(level?.coins || level?.difficulty?.coins)) ? Number(level?.coins || level?.difficulty?.coins) : 0,
-        demon: isDemon,
-        auto: parseBool(level?.auto || level?.difficulty?.auto)
+        demon: isTruthyFlag(level?.isDemon) || isTruthyFlag(level?.difficulty?.demon) || parsedStars >= 10,
+        auto: isTruthyFlag(level?.auto) || isTruthyFlag(level?.difficulty?.auto)
       },
       ratings: {
         rated: isRated,
@@ -160,6 +184,7 @@
       sourceType: String(level?.sourceType || ''),
       sourceKey: String(level?.sourceKey || '')
     };
+  }
   }
 
   function buildRow(level, index) {
