@@ -1134,20 +1134,19 @@ async function loadGdLevels() {
 // ==========================================
 
 function renderPublicGdLevels(items) {
-  const container = document.getElementById('gd-levels-container');
-  
-  if (!container) {
-    console.error('Could not find level container element in DOM.');
+  const tbody = document.getElementById('levels-tbody') || document.querySelector('.levels-tbody');
+
+  if (!tbody) {
+    console.error('GD Levels render failed: Could not find #levels-tbody element.');
     return;
   }
 
   if (!items || items.length === 0) {
-    container.innerHTML = '<p class="no-levels">No Geometry Dash levels found.</p>';
+    tbody.innerHTML = '<tr><td colspan="5" class="no-levels">No levels available.</td></tr>';
     return;
   }
 
-  // Normalize and render level cards directly into the container
-  container.innerHTML = items.map(l => {
+  tbody.innerHTML = items.map(l => {
     const id = l.id || l.level_id || '';
     const name = l.name || l.title || 'Unnamed Level';
     const author = l.author || l.creator || 'Unknown';
@@ -1157,19 +1156,13 @@ function renderPublicGdLevels(items) {
     const song = l.song || 'Unknown Song';
 
     return `
-      <div class="level-card" data-level-id="${id}">
-        <div class="level-header">
-          <h3>${name}</h3>
-          <span class="level-id">#${id}</span>
-        </div>
-        <p class="author">By <strong>${author}</strong></p>
-        <div class="level-stats">
-          <span>⭐ ${stars}</span>
-          <span>📥 ${downloads}</span>
-          <span>❤️ ${likes}</span>
-        </div>
-        <p class="song-info">🎵 ${song}</p>
-      </div>
+      <tr data-level-id="${id}">
+        <td><strong>${name}</strong> <span class="level-id">(#${id})</span></td>
+        <td>${author}</td>
+        <td>⭐ ${stars}</td>
+        <td>📥 ${downloads} / ❤️ ${likes}</td>
+        <td>🎵 ${song}</td>
+      </tr>
     `;
   }).join('');
 }
