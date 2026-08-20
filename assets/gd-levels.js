@@ -192,23 +192,6 @@
     };
   }
 
-  function matchesFilter(level, filter) {
-    switch (filter) {
-      case 'featured':
-        return level.ratings.featured;
-      case 'unrated':
-        return !level.ratings.rated && !level.ratings.featured && !level.ratings.epic;
-      case 'rated':
-        return level.ratings.rated;
-      case 'epic':
-        return level.ratings.epic;
-      case 'all':
-      default:
-        return true;
-    }
-  }
-  }
-
   function buildRow(level, index) {
     const tr = document.createElement('tr');
     tr.className = 'group border-b border-white/5 hover:bg-[#1A1A1C] transition-colors';
@@ -315,7 +298,7 @@
       case 'featured':
         return level.ratings.featured;
       case 'unrated':
-        return !level.ratings.rated;
+        return !level.ratings.rated && !level.ratings.featured && !level.ratings.epic;
       case 'rated':
         return level.ratings.rated;
       case 'epic':
