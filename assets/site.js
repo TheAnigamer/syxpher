@@ -311,10 +311,8 @@ window.addEventListener(
 // ==========================================
 
 let siteSettings = {};
-
 let showcaseItems = [];
-
-let gdLevelItems = [];
+let gdLevels = [];
 
 
 // ==========================================
@@ -1098,40 +1096,29 @@ function renderPublicShowcase(
 
 
 // ==========================================
-// PUBLIC GD LEVELS LOADER
+// GEOMETRY DASH LEVELS LOADER & RENDERER
 // ==========================================
 
 async function loadGdLevels() {
   try {
-    // Change '/api/gd-levels' to '/tracked-levels.json?_t=' + Date.now()
-    const response = await fetch(`/tracked-levels.json?_t=${Date.now()}`, {
-      method: 'GET',
-      headers: {
-        'Cache-Control': 'no-cache'
-      }
-    });
-
+    const response = await fetch('/api/levels', { cache: 'no-store' });
     if (!response.ok) {
-      throw new Error(`tracked-levels.json returned ${response.status}`);
+      throw new Error(`Levels API returned ${response.status}`);
     }
-
     const items = await response.json();
-
     if (!Array.isArray(items)) {
-      throw new Error('Invalid tracked levels JSON response');
+      throw new Error('Invalid levels API response');
     }
-
-    gdLevelItems = items;
+    gdLevels = items;
     renderPublicGdLevels(items);
-
   } catch (error) {
-    console.error('GD Levels loading failed:', error);
+    console.error('GD levels loading failed:', error);
+    const tbody = document.getElementById('levels-tbody') || document.querySelector('.levels-tbody');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="8" class="no-levels">Failed to load Geometry Dash levels.</td></tr>';
+    }
   }
 }
-
-// ==========================================
-// RENDER PUBLIC GD LEVELS
-// ==========================================
 
 function renderPublicGdLevels(items) {
   const tbody = document.getElementById('levels-tbody') || document.querySelector('.levels-tbody');
@@ -1162,16 +1149,16 @@ function renderPublicGdLevels(items) {
     const paddedIndex = String(index + 1).padStart(2, '0');
 
     return `
-      <tr data-level-id="${id}">
+      <tr data-level-id="${escapeHtml(id)}">
         <td>${paddedIndex}</td>
-        <td><strong>${name}</strong></td>
-        <td>${id}</td>
-        <td>${author}</td>
-        <td>${diffIcon} ${diffName}</td>
-        <td>${statusText}</td>
-        <td>${category}</td>
+        <td><strong>${escapeHtml(name)}</strong></td>
+        <td>${escapeHtml(id)}</td>
+        <td>${escapeHtml(author)}</td>
+        <td>${diffIcon} ${escapeHtml(diffName)}</td>
+        <td>${escapeHtml(statusText)}</td>
+        <td>${escapeHtml(category)}</td>
         <td>
-          <a href="https://gdbrowser.com/${id}" target="_blank" rel="noopener">
+          <a href="https://gdbrowser.com/${escapeHtml(id)}" target="_blank" rel="noopener">
             <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
           </a>
         </td>
@@ -1179,10 +1166,6 @@ function renderPublicGdLevels(items) {
     `;
   }).join('');
 }
-
-// =====================================
-// RENDER CATEGORY CONTAINER
-// =====================================
 
 function renderCategoryContainer(containerId, levelArray) {
   const container = document.getElementById(containerId);
@@ -1194,21 +1177,23 @@ function renderCategoryContainer(containerId, levelArray) {
   }
 
   container.innerHTML = levelArray.map(level => `
-    <div class="level-card" data-level-id="${level.id || ''}">
+    <div class="level-card" data-level-id="${escapeHtml(level.id || '')}">
       <div class="level-header">
-        <h3>${level.name || 'Unnamed'}</h3>
-        <span class="level-id">#${level.id || ''}</span>
+        <h3>${escapeHtml(level.name || 'Unnamed')}</h3>
+        <span class="level-id">#${escapeHtml(level.id || '')}</span>
       </div>
-      <p class="author">By <strong>${level.author || 'Unknown'}</strong></p>
+      <p class="author">By <strong>${escapeHtml(level.author || 'Unknown')}</strong></p>
       <div class="level-stats">
         <span>⭐ ${level.stars ?? 0}</span>
         <span>📥 ${Number(level.downloads || 0).toLocaleString()}</span>
         <span>❤️ ${Number(level.likes || 0).toLocaleString()}</span>
       </div>
-      <p class="song-info">🎵 ${level.song || 'Unknown Song'}</p>
+      <p class="song-info">🎵 ${escapeHtml(level.song || 'Unknown Song')}</p>
     </div>
   `).join('');
 }
+
+
 // ==========================================
 // CREATE ADMIN PANEL
 // ==========================================
@@ -1283,14 +1268,6 @@ function createAdminPanel() {
           data-admin-tab="showcase"
         >
           Showcase
-        </button>
-
-        <button
-          type="button"
-          class="syx-admin-tab"
-          data-admin-tab="gd-levels"
-        >
-          GD Levels
         </button>
 
       </div>
@@ -1660,53 +1637,6 @@ function createAdminPanel() {
 
 
         <!-- ================================= -->
-        <!-- GD LEVELS EDITOR -->
-        <!-- ================================= -->
-
-        <div
-          id="syx-admin-gd-levels-tab"
-          class="syx-admin-tab-content"
-        >
-
-          <div class="syx-showcase-toolbar">
-
-            <div>
-              <div class="syx-admin-section-title">
-                GD Levels Editor
-              </div>
-
-              <div class="syx-showcase-help">
-                Add, edit, delete, and reorder Geometry Dash archive levels.
-              </div>
-            </div>
-
-
-            <button
-              type="button"
-              id="syx-gd-level-add"
-              class="syx-admin-save"
-            >
-              + Add Level
-            </button>
-
-          </div>
-
-
-          <div
-            id="syx-gd-level-list"
-            class="syx-showcase-list"
-          ></div>
-
-
-          <div
-            id="syx-gd-level-status"
-            class="syx-admin-status"
-          ></div>
-
-        </div>
-
-
-        <!-- ================================= -->
         <!-- BOTTOM ACTIONS -->
         <!-- ================================= -->
 
@@ -1828,22 +1758,6 @@ function createAdminPanel() {
       'click',
       () => {
         openShowcaseEditor();
-      }
-    );
-
-
-  // ========================================
-  // GD LEVELS ADD
-  // ========================================
-
-  document
-    .getElementById(
-      'syx-gd-level-add'
-    )
-    .addEventListener(
-      'click',
-      () => {
-        openGdLevelEditor();
       }
     );
 
@@ -1983,26 +1897,6 @@ function switchAdminTab(
     }
 
     loadAdminShowcase();
-    return;
-  }
-
-
-  if (
-    tabName === 'gd-levels'
-  ) {
-
-    const gdLevelsTab =
-      document.getElementById(
-        'syx-admin-gd-levels-tab'
-      );
-
-    if (gdLevelsTab) {
-      gdLevelsTab.classList.add(
-        'active'
-      );
-    }
-
-    loadAdminGdLevels();
   }
 }
 
@@ -3305,521 +3199,6 @@ async function moveShowcaseItem(
 
 
 // ==========================================
-// LOAD ADMIN GD LEVELS
-// ==========================================
-
-async function loadAdminGdLevels() {
-  const list = document.getElementById('syx-gd-level-list');
-  const status = document.getElementById('syx-gd-level-status');
-
-  if (!list) return;
-
-  list.innerHTML = `
-    <div class="syx-showcase-loading">
-      Loading GD levels...
-    </div>
-  `;
-
-  try {
-    const response = await adminFetch('/api/admin/gd-levels', {
-      method: 'GET',
-      cache: 'no-store'
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        logoutAdmin();
-        throw new Error('Admin session expired.');
-      }
-      throw new Error(result.error || 'Could not load GD levels.');
-    }
-
-    if (!Array.isArray(result)) {
-      throw new Error('Invalid GD levels response.');
-    }
-
-    gdLevelItems = result;
-    renderAdminGdLevels();
-
-    if (status) {
-      status.textContent = `${result.length} level${result.length === 1 ? '' : 's'} loaded.`;
-      status.className = 'syx-admin-status success';
-    }
-
-  } catch (error) {
-    console.error('Admin GD levels loading failed:', error);
-    list.innerHTML = `
-      <div class="syx-showcase-empty">
-        ${escapeHtml(error.message)}
-      </div>
-    `;
-
-    if (status) {
-      status.textContent = error.message;
-      status.className = 'syx-admin-status error';
-    }
-  }
-}
-
-
-// ==========================================
-// RENDER ADMIN GD LEVELS
-// ==========================================
-
-function renderAdminGdLevels() {
-  const list = document.getElementById('syx-gd-level-list');
-  if (!list) return;
-
-  list.innerHTML = '';
-
-  if (!gdLevelItems.length) {
-    list.innerHTML = `
-      <div class="syx-showcase-empty">
-        No GD levels added yet. Click "+ Add Level" to create one.
-      </div>
-    `;
-    return;
-  }
-
-  gdLevelItems.forEach((item, index) => {
-    const card = document.createElement('div');
-    card.className = 'syx-showcase-admin-card';
-
-    const image = item.image || '';
-
-    card.innerHTML = `
-      <div class="syx-showcase-admin-number">
-        ${String(index + 1).padStart(2, '0')}
-      </div>
-
-      <div class="syx-showcase-admin-preview">
-        ${
-          image
-            ? `
-              <img
-                src="${escapeHtml(image)}"
-                alt="${escapeHtml(item.title || '')}"
-                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
-              >
-              <div class="syx-showcase-image-fallback" style="display:none;">
-                IMAGE ERROR
-              </div>
-            `
-            : `
-              <div class="syx-showcase-image-fallback">
-                NO IMAGE
-              </div>
-            `
-        }
-      </div>
-
-      <div class="syx-showcase-admin-info">
-        <div class="syx-showcase-admin-title">
-          ${escapeHtml(item.title || 'Untitled Level')}
-        </div>
-
-        <div class="syx-showcase-admin-category">
-          ${escapeHtml(item.difficulty || 'Featured')} ${item.level_id ? `· ID: ${escapeHtml(item.level_id)}` : ''}
-        </div>
-
-        <div class="syx-showcase-admin-description">
-          ${escapeHtml(item.description || 'No description')}
-        </div>
-      </div>
-
-      <div class="syx-showcase-admin-controls">
-        <button
-          type="button"
-          class="syx-mini-button"
-          data-action="up"
-          title="Move up"
-          ${index === 0 ? 'disabled' : ''}
-        >
-          ↑
-        </button>
-
-        <button
-          type="button"
-          class="syx-mini-button"
-          data-action="down"
-          title="Move down"
-          ${index === gdLevelItems.length - 1 ? 'disabled' : ''}
-        >
-          ↓
-        </button>
-
-        <button
-          type="button"
-          class="syx-mini-button"
-          data-action="edit"
-        >
-          Edit
-        </button>
-
-        <button
-          type="button"
-          class="syx-mini-button danger"
-          data-action="delete"
-        >
-          Delete
-        </button>
-      </div>
-    `;
-
-    const buttons = card.querySelectorAll('[data-action]');
-
-    buttons.forEach(button => {
-      button.addEventListener('click', () => {
-        const action = button.dataset.action;
-
-        if (action === 'up') moveGdLevelItem(index, -1);
-        if (action === 'down') moveGdLevelItem(index, 1);
-        if (action === 'edit') openGdLevelEditor(item);
-        if (action === 'delete') deleteGdLevelItem(item);
-      });
-    });
-
-    list.appendChild(card);
-  });
-}
-
-
-// ==========================================
-// GD LEVEL EDITOR MODAL
-// ==========================================
-
-function openGdLevelEditor(item = null) {
-  const existing = document.getElementById('syx-gd-level-editor');
-  if (existing) existing.remove();
-
-  const isEditing = Boolean(item);
-
-  const editor = document.createElement('div');
-  editor.id = 'syx-gd-level-editor';
-  editor.className = 'syx-showcase-editor-overlay';
-
-  editor.innerHTML = `
-    <div class="syx-showcase-editor-window">
-
-      <div class="syx-showcase-editor-header">
-        <div>
-          <div class="syx-admin-kicker">GD ARCHIVE</div>
-          <h3>${isEditing ? 'Edit Level' : 'Add Level'}</h3>
-        </div>
-
-        <button type="button" id="syx-gd-editor-close" class="syx-admin-close">×</button>
-      </div>
-
-      <div class="syx-showcase-editor-content">
-
-        <label>
-          Level Title
-          <input
-            id="gd-edit-title"
-            type="text"
-            value="${escapeHtml(item?.title || '')}"
-            placeholder="Level Name"
-          >
-        </label>
-
-        <label>
-          Level ID
-          <input
-            id="gd-edit-level-id"
-            type="text"
-            value="${escapeHtml(item?.level_id || '')}"
-            placeholder="e.g. 104928475"
-          >
-        </label>
-
-        <label>
-          Difficulty / Status
-          <input
-            id="gd-edit-difficulty"
-            type="text"
-            value="${escapeHtml(item?.difficulty || '')}"
-            placeholder="Extreme Demon / Unrated / Featured"
-          >
-        </label>
-
-        <label>
-          Description
-          <textarea
-            id="gd-edit-description"
-            rows="4"
-            placeholder="Level description, song details, or notes..."
-          >${escapeHtml(item?.description || '')}</textarea>
-        </label>
-
-        <label>
-          Thumbnail / Image URL
-          <input
-            id="gd-edit-image"
-            type="url"
-            value="${escapeHtml(item?.image || '')}"
-            placeholder="https://example.com/level-thumb.jpg"
-          >
-        </label>
-
-        <label>
-          Video / Showcase Link
-          <input
-            id="gd-edit-link"
-            type="url"
-            value="${escapeHtml(item?.link || '')}"
-            placeholder="https://youtube.com/watch?v=..."
-          >
-        </label>
-
-        <div id="syx-gd-editor-status" class="syx-admin-status"></div>
-
-        <div class="syx-admin-actions">
-          <button type="button" id="syx-gd-editor-save" class="syx-admin-save">
-            ${isEditing ? 'Save Changes' : 'Add Level'}
-          </button>
-
-          <button type="button" id="syx-gd-editor-cancel" class="syx-admin-secondary">
-            Cancel
-          </button>
-        </div>
-
-      </div>
-
-    </div>
-  `;
-
-  document.body.appendChild(editor);
-
-  document.getElementById('syx-gd-editor-close').addEventListener('click', closeGdLevelEditor);
-  document.getElementById('syx-gd-editor-cancel').addEventListener('click', closeGdLevelEditor);
-  document.getElementById('syx-gd-editor-save').addEventListener('click', () => saveGdLevelItem(item));
-
-  editor.addEventListener('click', event => {
-    if (event.target === editor) closeGdLevelEditor();
-  });
-
-  setTimeout(() => {
-    editor.classList.add('open');
-  }, 10);
-}
-
-
-// ==========================================
-// CLOSE GD LEVEL EDITOR
-// ==========================================
-
-function closeGdLevelEditor() {
-  const editor = document.getElementById('syx-gd-level-editor');
-  if (!editor) return;
-
-  editor.classList.remove('open');
-  setTimeout(() => {
-    editor.remove();
-  }, 200);
-}
-
-
-// ==========================================
-// SAVE GD LEVEL ITEM
-// ==========================================
-
-async function saveGdLevelItem(existingItem) {
-  const button = document.getElementById('syx-gd-editor-save');
-  const status = document.getElementById('syx-gd-editor-status');
-
-  const title = document.getElementById('gd-edit-title')?.value.trim();
-  const level_id = document.getElementById('gd-edit-level-id')?.value.trim();
-  const difficulty = document.getElementById('gd-edit-difficulty')?.value.trim();
-  const description = document.getElementById('gd-edit-description')?.value.trim();
-  const image = document.getElementById('gd-edit-image')?.value.trim();
-  const link = document.getElementById('gd-edit-link')?.value.trim();
-
-  if (!title) {
-    if (status) {
-      status.textContent = 'Level Title is required.';
-      status.className = 'syx-admin-status error';
-    }
-    return;
-  }
-
-  const data = {
-    title,
-    level_id: level_id || '',
-    difficulty: difficulty || '',
-    description: description || '',
-    image: image || '',
-    link: link || ''
-  };
-
-  if (button) {
-    button.disabled = true;
-    button.textContent = existingItem ? 'Saving...' : 'Adding...';
-  }
-
-  if (status) {
-    status.textContent = '';
-    status.className = 'syx-admin-status';
-  }
-
-  try {
-    let response;
-
-    if (existingItem) {
-      response = await adminFetch(`/api/admin/gd-levels/${existingItem.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-    } else {
-      response = await adminFetch('/api/admin/gd-levels', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-    }
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        logoutAdmin();
-        throw new Error('Admin session expired.');
-      }
-      throw new Error(result.error || 'Could not save level.');
-    }
-
-    closeGdLevelEditor();
-
-    await loadGdLevels();
-    await loadAdminGdLevels();
-
-    const statusElement = document.getElementById('syx-gd-level-status');
-    if (statusElement) {
-      statusElement.textContent = existingItem ? 'GD Level updated successfully.' : 'GD Level added successfully.';
-      statusElement.className = 'syx-admin-status success';
-    }
-
-  } catch (error) {
-    console.error('GD level save failed:', error);
-    if (status) {
-      status.textContent = error.message;
-      status.className = 'syx-admin-status error';
-    }
-  } finally {
-    if (button) {
-      button.disabled = false;
-      button.textContent = existingItem ? 'Save Changes' : 'Add Level';
-    }
-  }
-}
-
-
-// ==========================================
-// DELETE GD LEVEL ITEM
-// ==========================================
-
-async function deleteGdLevelItem(item) {
-  const title = item.title || 'this level';
-  const confirmed = window.confirm(`Delete level "${title}"?\n\nThis cannot be undone.`);
-
-  if (!confirmed) return;
-
-  const status = document.getElementById('syx-gd-level-status');
-
-  try {
-    const response = await adminFetch(`/api/admin/gd-levels/${item.id}`, {
-      method: 'DELETE'
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        logoutAdmin();
-        throw new Error('Admin session expired.');
-      }
-      throw new Error(result.error || 'Could not delete level.');
-    }
-
-    gdLevelItems = gdLevelItems.filter(current => current.id !== item.id);
-
-    await loadGdLevels();
-    renderAdminGdLevels();
-
-    if (status) {
-      status.textContent = 'GD level deleted successfully.';
-      status.className = 'syx-admin-status success';
-    }
-
-  } catch (error) {
-    console.error('GD level delete failed:', error);
-    if (status) {
-      status.textContent = error.message;
-      status.className = 'syx-admin-status error';
-    }
-  }
-}
-
-
-// ==========================================
-// MOVE GD LEVEL ITEM
-// ==========================================
-
-async function moveGdLevelItem(index, direction) {
-  const newIndex = index + direction;
-
-  if (newIndex < 0 || newIndex >= gdLevelItems.length) return;
-
-  const newItems = [...gdLevelItems];
-  const current = newItems[index];
-  const target = newItems[newIndex];
-
-  newItems[index] = target;
-  newItems[newIndex] = current;
-
-  const ids = newItems.map(item => item.id);
-  const status = document.getElementById('syx-gd-level-status');
-
-  try {
-    const response = await adminFetch('/api/admin/gd-levels/reorder', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids })
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        logoutAdmin();
-        throw new Error('Admin session expired.');
-      }
-      throw new Error(result.error || 'Could not reorder levels.');
-    }
-
-    gdLevelItems = newItems;
-
-    renderAdminGdLevels();
-    await loadGdLevels();
-
-    if (status) {
-      status.textContent = 'GD levels order saved.';
-      status.className = 'syx-admin-status success';
-    }
-
-  } catch (error) {
-    console.error('GD levels reorder failed:', error);
-    if (status) {
-      status.textContent = error.message;
-      status.className = 'syx-admin-status error';
-    }
-  }
-}
-
-
-// ==========================================
 // LOG OUT
 // ==========================================
 
@@ -3837,23 +3216,13 @@ function logoutAdmin() {
   closeAdminPanel();
 
 
-  const showcaseEditor =
+  const editor =
     document.getElementById(
       'syx-showcase-editor'
     );
 
-  if (showcaseEditor) {
-    showcaseEditor.remove();
-  }
-
-
-  const gdEditor =
-    document.getElementById(
-      'syx-gd-level-editor'
-    );
-
-  if (gdEditor) {
-    gdEditor.remove();
+  if (editor) {
+    editor.remove();
   }
 
 
