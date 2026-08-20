@@ -1133,10 +1133,14 @@ async function loadGdLevels() {
 
 function renderPublicGdLevels(items) {
   const archive = document.getElementById('archive');
-  if (!archive) return;
+  const container = archive?.querySelector('.grid, .syx-archive-grid') || archive?.querySelector(':scope > div:nth-child(2)');
+  
+  if (!container) {
+    console.warn('GD Levels container not found in DOM!');
+    return;
+  }
 
-  const container = archive.querySelector('.grid, .syx-archive-grid') || archive.querySelector(':scope > div:nth-child(2)');
-  if (!container) return;
+  console.log('Rendering levels:', items);
 
   container.innerHTML = '';
 
