@@ -1132,12 +1132,102 @@ async function loadGdLevels() {
 // ==========================================
 
 function renderPublicGdLevels(items) {
-  // Clear grid container to only show the table view
   const archive = document.getElementById('archive');
-  if (archive) {
-    const grid = archive.querySelector('.grid, .syx-archive-grid');
-    if (grid) grid.innerHTML = '';
+  if (!archive) return;
+
+  // Find or clear archive list container
+  let container = archive.querySelector('.syx-gd-archive-container, .grid, .syx-archive-grid');
+  
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'syx-gd-archive-container space-y-3 mt-8';
+    archive.appendChild(container);
+  } else {
+    container.innerHTML = '';
   }
+
+  if (!items || items.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-12 border border-white/10 bg-[#111114] text-white/40 font-mono text-xs tracking-wider">
+        NO GD LEVELS FOUND IN ARCHIVE
+      </div>
+    `;
+    return;
+  }
+
+  items.forEach((item, index) => {
+    // Normalize field names across worker D1 DB and secondary API payloads
+    const title = item.title || item.name || 'Untitled Level';
+    const levelId = item.level_id || item.id || '';
+    const description = item.description || item.desc || '';
+    const image = item.image || item.thumbnail || '';
+    const link = item.link || (levelId ? `https://gdbrowser.com/${levelId}` : '');
+    const rawDifficulty = item.difficulty || item.rating || 'Unrated';
+
+    // Normalize badge status flags
+    const isEpic = Boolean(
+      item.epic || 
+      item.is_epic || 
+      (typeof rawDifficulty === 'string' && rawDifficulty.toLowerCase().includes('epic'))
+    );
+    
+    const isFeatured = Boolean(
+      item.featured || 
+      item.is_featured || 
+      (typeof rawDifficulty === 'string' && rawDifficulty.toLowerCase().includes('feature'))
+    );
+
+    // Apply status styling
+    let badgeStyle = 'border-white/20 text-white/50 bg-white/5';
+    let badgeLabel = escapeHtml(rawDifficulty);
+
+    if (isEpic) {
+      badgeStyle = 'border-amber-400/50 text-amber-400 bg-amber-400/10';
+      if (!badgeLabel.toLowerCase().includes('epic')) badgeLabel += ' · EPIC';
+    } else if (isFeatured) {
+      badgeStyle = 'border-[#00f5ff]/50 text-[#00f5ff] bg-[#00f5ff]/10';
+      if (!badgeLabel.toLowerCase().includes('featured')) badgeLabel += ' · FEATURED';
+    }
+
+    const card = document.createElement('article');
+    card.className = 'group relative flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-white/10 bg-[#111114] hover:border-[#ff9e00]/50 hover:bg-[#151518] transition-all duration-300 gap-4';
+
+    card.innerHTML = `
+      <div class="flex items-center gap-4 min-w-0 w-full sm:w-auto">
+        <span class="font-mono text-xs text-white/30 w-6 shrink-0">${String(index + 1).padStart(2, '0')}</span>
+        
+        ${image ? `
+          <div class="w-16 h-12 rounded overflow-hidden shrink-0 bg-[#0a0a0c] border border-white/10 hidden sm:block">
+            <img src="${escapeHtml(image)}" alt="${escapeHtml(title)}" class="w-full h-full object-cover" onerror="this.parentElement.style.display='none'">
+          </div>
+        ` : ''}
+
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-3 flex-wrap">
+            <h3 class="font-bold text-base text-white group-hover:text-[#ff9e00] transition-colors truncate">
+              ${escapeHtml(title)}
+            </h3>
+            ${levelId ? `<span class="font-mono text-[11px] text-white/40 bg-white/5 px-2 py-0.5 border border-white/10">ID: ${escapeHtml(levelId)}</span>` : ''}
+          </div>
+          ${description ? `<p class="text-white/40 text-xs mt-1 line-clamp-1">${escapeHtml(description)}</p>` : ''}
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
+        <span class="font-mono text-[10px] px-2.5 py-1 uppercase tracking-wider border ${badgeStyle}">
+          ${badgeLabel}
+        </span>
+        ${link ? `
+          <a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" class="font-mono text-[11px] text-white/60 hover:text-[#ff9e00] border border-white/20 hover:border-[#ff9e00] px-3 py-1 transition-colors inline-flex items-center gap-1">
+            VIEW
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+          </a>
+        ` : ''}
+      </div>
+    `;
+
+    container.appendChild(card);
+  });
 }
 
 // ==========================================
