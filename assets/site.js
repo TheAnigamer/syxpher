@@ -1135,16 +1135,13 @@ function renderPublicGdLevels(items) {
   const archive = document.getElementById('archive');
   if (!archive) return;
 
-  // Find or clear archive list container
-  let container = archive.querySelector('.syx-gd-archive-container, .grid, .syx-archive-grid');
-  
-  if (!container) {
-    container = document.createElement('div');
-    container.className = 'syx-gd-archive-container space-y-3 mt-8';
-    archive.appendChild(container);
-  } else {
-    container.innerHTML = '';
-  }
+  // Clear the existing table/content inside #archive completely
+  archive.innerHTML = '';
+
+  // Create the new card container
+  const container = document.createElement('div');
+  container.className = 'syx-gd-archive-container space-y-3 mt-8';
+  archive.appendChild(container);
 
   if (!items || items.length === 0) {
     container.innerHTML = `
