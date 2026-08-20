@@ -119,26 +119,24 @@
     return "Levels I've Built On";
   }
 
-  function parseBool(val) {
-      if (typeof val === 'boolean') return val;
-      if (typeof val === 'number') return val > 0;
-      if (typeof val === 'string') {
-        const s = val.trim().toLowerCase();
-        return s === 'true' || s === '1';
-      }
-      return false;
-    }
-
   function extractStars(level) {
-    if (typeof level?.stars === 'number') return level.stars;
-    if (typeof level?.stars === 'string' && !isNaN(parseFloat(level.stars))) return parseFloat(level.stars);
-    if (typeof level?.difficulty?.stars === 'number') return level.difficulty.stars;
-    if (typeof level?.difficulty === 'number') return level.difficulty;
-    
-    // Extract digit if difficulty is a string like "6 Stars" or "6"
-    if (typeof level?.difficulty === 'string') {
-      const match = level.difficulty.match(/\d+/);
-      if (match) return parseInt(match[0], 10);
+    const candidates = [
+      level?.stars,
+      level?.star_count,
+      level?.difficulty?.stars,
+      level?.difficulty
+    ];
+
+    for (const val of candidates) {
+      if (val !== null && val !== undefined) {
+        const num = Number(val);
+        if (Number.isFinite(num) && num > 0) return num;
+
+        if (typeof val === 'string') {
+          const match = val.match(/\d+/);
+          if (match) return parseInt(match[0], 10);
+        }
+      }
     }
     return 0;
   }
@@ -184,7 +182,6 @@
       sourceType: String(level?.sourceType || ''),
       sourceKey: String(level?.sourceKey || '')
     };
-  }
   }
 
   function buildRow(level, index) {
@@ -379,35 +376,33 @@
     if (topCountEl) topCountEl.textContent = 'Loading…';
 
     try {
-          const res = await fetch(API_URL, {
-            method: 'GET',
-            cache: 'no-store',
-            headers: {
-              Accept: 'application/json'
-            }
-          });
-    
-          if (!res.ok) {
-            throw new Error(`Request failed with status ${res.status}`);
-          }
-    
-          const data = await res.json();
-      
-          // Normalize levels whether API returns [...] or { success: true, levels: [...] }
-          const rawLevels = Array.isArray(data) ? data : (data?.levels || []);
-    
-          if (!Array.isArray(rawLevels)) {
-            throw new Error('The levels API response is missing the expected levels array.');
-          }
+      const res = await fetch(API_URL, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: {
+          Accept: 'application/json'
+        }
+      });
 
-          const levels = rawLevels.map(normalizeLevel);
-          setupLevelControls(levels);
-        } catch (err) {
-          console.error('Failed to load Geometry Dash levels:', err);
-          renderMessage(tbody, 'Unable to load levels right now. Check the browser console for the API error.');
-          if (countEl) countEl.textContent = 'Showing 0 of 0 levels';
-          if (topCountEl) topCountEl.textContent = '0';
-       }
+      if (!res.ok) {
+        throw new Error(`Request failed with status ${res.status}`);
+      }
+
+      const data = await res.json();
+      const rawLevels = Array.isArray(data) ? data : (data?.levels || []);
+
+      if (!Array.isArray(rawLevels)) {
+        throw new Error('The levels API response is missing the expected levels array.');
+      }
+
+      const levels = rawLevels.map(normalizeLevel);
+      setupLevelControls(levels);
+    } catch (err) {
+      console.error('Failed to load Geometry Dash levels:', err);
+      renderMessage(tbody, 'Unable to load levels right now. Check the browser console for the API error.');
+      if (countEl) countEl.textContent = 'Showing 0 of 0 levels';
+      if (topCountEl) topCountEl.textContent = '0';
+    }
   }
 
   if (document.readyState === 'loading') {
