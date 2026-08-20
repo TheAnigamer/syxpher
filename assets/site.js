@@ -1132,12 +1132,56 @@ async function loadGdLevels() {
 // ==========================================
 
 function renderPublicGdLevels(items) {
-  // Clear grid container to only show the table view
   const archive = document.getElementById('archive');
-  if (archive) {
-    const grid = archive.querySelector('.grid, .syx-archive-grid');
-    if (grid) grid.innerHTML = '';
+  if (!archive) return;
+
+  const tbody = archive.querySelector('tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+
+  if (!Array.isArray(items) || items.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" class="py-6 text-center text-white/30 font-mono text-xs">
+          NO LEVELS FOUND
+        </td>
+      </tr>
+    `;
+    return;
   }
+
+  items.forEach((item) => {
+    const row = document.createElement('tr');
+    row.className = 'border-b border-white/5 hover:bg-white/[0.02] transition-colors';
+
+    const diffLower = String(item.difficulty || '').toLowerCase();
+    const isEpic = Boolean(item.epic || item.is_epic || diffLower.includes('epic'));
+    const isFeatured = Boolean(item.featured || item.is_featured || diffLower.includes('feature'));
+    const isRated = Boolean(item.rated || item.is_rated || (item.stars && item.stars > 0) || (diffLower && !diffLower.includes('unrated')));
+
+    let statusBadge = '<span class="px-2 py-0.5 border border-white/10 text-white/30 bg-white/5 font-mono text-[10px] tracking-wider">UNRATED</span>';
+    
+    if (isEpic) {
+      statusBadge = '<span class="px-2 py-0.5 border border-amber-400/40 text-amber-400 bg-amber-400/10 font-mono text-[10px] tracking-wider">EPIC</span>';
+    } else if (isFeatured) {
+      statusBadge = '<span class="px-2 py-0.5 border border-[#00f5ff]/40 text-[#00f5ff] bg-[#00f5ff]/10 font-mono text-[10px] tracking-wider">FEATURED</span>';
+    } else if (isRated) {
+      statusBadge = '<span class="px-2 py-0.5 border border-emerald-500/40 text-emerald-400 bg-emerald-500/10 font-mono text-[10px] tracking-wider">RATED</span>';
+    }
+
+    row.innerHTML = `
+      <td class="py-4 px-4 font-bold text-white text-sm">${escapeHtml(item.title || 'Untitled')}</td>
+      <td class="py-4 px-4 font-mono text-xs text-white/50">${escapeHtml(item.level_id || '—')}</td>
+      <td class="py-4 px-4 font-mono text-xs text-[#00f5ff]">${escapeHtml(item.difficulty || '—')}</td>
+      <td class="py-4 px-4">${statusBadge}</td>
+      <td class="py-4 px-4 text-right">
+        ${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-[#ff9e00] hover:underline">WATCH</a>` : '—'}
+      </td>
+    `;
+
+    tbody.appendChild(row);
+  });
 }
 
 // ==========================================
