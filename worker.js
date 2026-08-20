@@ -155,25 +155,58 @@ function json(data, status = 200) {
 }
 
 async function requireAdmin(request, env) {
-  const auth =
-    request.headers.get("Authorization") || "";
-
-  if (!auth.startsWith("Bearer ")) {
-    return false;
-  }
-
-  return verifyAdminToken(
-    auth.slice(7),
-    env
-  );
+  const auth = request.headers.get("Authorization") || "";
+  if (!auth.startsWith("Bearer ")) return false;
+  return verifyAdminToken(auth.slice(7), env);
 }
 
 function cleanStr(val) {
   if (val === null || val === undefined) return "";
-  if (typeof val === "object") {
-    return val.name || val.title || val.label || val.username || val.text || "";
+  if (typeof val === "string" || typeof val === "number") {
+    const s = String(val).trim();
+    return s === "[object Object]" ? "" : s;
   }
-  return String(val);
+  if (typeof val === "object") {
+    return cleanStr(
+      val.name || val.title || val.label || val.username || val.text || val.difficulty || val.rating || ""
+    );
+  }
+  return "";
+}
+
+function parseDifficulty(val) {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "string" || typeof val === "number") {
+    const s = String(val).trim();
+    if (s === "[object Object]" || s.toUpperCase() === "FEATURED") return "";
+    return s;
+  }
+  if (typeof val === "object") {
+    if (val.name && typeof val.name === "string" && val.name.toUpperCase() !== "FEATURED") return String(val.name);
+    if (val.label) return String(val.label);
+    if (val.difficulty) return parseDifficulty(val.difficulty);
+    if (val.rating) return parseDifficulty(val.rating);
+    if (val.stars !== undefined && val.stars !== null) return `${val.stars} Stars`;
+  }
+  return "";
+}
+
+function getLevelDifficulty(botItem, d1Item) {
+  const d1Diff = d1Item ? parseDifficulty(d1Item.difficulty) : "";
+  if (d1Diff) return d1Diff;
+
+  const botDiff = parseDifficulty(botItem.difficulty);
+  if (botDiff) return botDiff;
+
+  const botRating = parseDifficulty(botItem.rating);
+  if (botRating) return botRating;
+
+  const botDiffName = parseDifficulty(botItem.difficulty_name);
+  if (botDiffName) return botDiffName;
+
+  if (botItem.stars) return `${botItem.stars} Stars`;
+
+  return "Unrated";
 }
 
 // ==========================================
@@ -182,17 +215,13 @@ function cleanStr(val) {
 
 async function getSiteSettings(env) {
   const { results } = await env.DB.prepare(
-    `SELECT key, value
-     FROM site_settings
-     ORDER BY key`
+    `SELECT key, value FROM site_settings ORDER BY key`
   ).all();
 
   const settings = {};
-
   for (const row of results || []) {
     settings[row.key] = row.value;
   }
-
   return settings;
 }
 
@@ -296,7 +325,6 @@ async function getAllLevels(env) {
 
     const botTitle = cleanStr(botItem.title || botItem.name || "");
     const botCreator = cleanStr(botItem.creator || botItem.author || "");
-    const botDifficulty = cleanStr(botItem.difficulty || botItem.rating || "");
     const botDesc = cleanStr(botItem.description || "");
     const botVideo = cleanStr(botItem.video || botItem.video_url || botItem.youtube || botItem.link || "");
 
@@ -306,7 +334,7 @@ async function getAllLevels(env) {
 
       const titleVal = cleanStr(d1Item.title || d1Item.name || botTitle);
       const creatorVal = cleanStr(d1Item.creator || botCreator);
-      const diffVal = cleanStr(d1Item.difficulty || botDifficulty);
+      const diffVal = getLevelDifficulty(botItem, d1Item);
       const descVal = cleanStr(d1Item.description ?? botDesc);
       const videoVal = cleanStr(d1Item.video || d1Item.video_url || botVideo);
 
@@ -319,12 +347,17 @@ async function getAllLevels(env) {
         author: creatorVal,
         description: descVal,
         difficulty: diffVal,
+        rating: diffVal,
+        featured: diffVal,
         video: videoVal,
         video_url: videoVal,
         link: videoVal,
+        is_bot: true,
+        source: "bot",
         sort_order: d1Item.sort_order ?? botItem.sort_order ?? 0
       });
     } else {
+      const diffVal = getLevelDifficulty(botItem, null);
       combined.push({
         id: levelIdStr || Date.now(),
         level_id: levelIdStr,
@@ -333,10 +366,14 @@ async function getAllLevels(env) {
         creator: botCreator,
         author: botCreator,
         description: botDesc,
-        difficulty: botDifficulty,
+        difficulty: diffVal,
+        rating: diffVal,
+        featured: diffVal,
         video: botVideo,
         video_url: botVideo,
         link: botVideo,
+        is_bot: true,
+        source: "bot",
         sort_order: botItem.sort_order ?? 0
       });
     }
@@ -347,7 +384,7 @@ async function getAllLevels(env) {
 
     const titleVal = cleanStr(row.title || row.name || "");
     const creatorVal = cleanStr(row.creator || "");
-    const diffVal = cleanStr(row.difficulty || "");
+    const diffVal = parseDifficulty(row.difficulty) || "Unrated";
     const descVal = cleanStr(row.description || "");
     const videoVal = cleanStr(row.video || row.video_url || row.link || "");
 
@@ -360,9 +397,13 @@ async function getAllLevels(env) {
       author: creatorVal,
       description: descVal,
       difficulty: diffVal,
+      rating: diffVal,
+      featured: diffVal,
       video: videoVal,
       video_url: videoVal,
       link: videoVal,
+      is_bot: false,
+      source: "manual",
       sort_order: row.sort_order ?? 0
     });
   }
@@ -372,7 +413,6 @@ async function getAllLevels(env) {
   return combined;
 }
 
-
 // ==========================================
 // WORKER MAIN
 // ==========================================
@@ -381,498 +421,184 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // ========================================
     // ADMIN LOGIN
-    // ========================================
-
-    if (
-      url.pathname === "/api/verify" &&
-      request.method === "POST"
-    ) {
+    if (url.pathname === "/api/verify" && request.method === "POST") {
       try {
         const body = await request.json();
         const code = String(body.code || "");
+        if (!/^\d{6}$/.test(code)) return json({ ok: false }, 400);
 
-        if (!/^\d{6}$/.test(code)) {
-          return json({ ok: false }, 400);
-        }
+        const valid = await verifyTOTP(env.TOTP_SECRET, code);
+        if (!valid) return json({ ok: false });
 
-        const valid = await verifyTOTP(
-          env.TOTP_SECRET,
-          code
-        );
-
-        if (!valid) {
-          return json({ ok: false });
-        }
-
-        const token =
-          await createAdminToken(env);
-
-        return json({
-          ok: true,
-          token
-        });
+        const token = await createAdminToken(env);
+        return json({ ok: true, token });
       } catch (error) {
         console.error(error);
-
-        return json(
-          { ok: false },
-          500
-        );
+        return json({ ok: false }, 500);
       }
     }
 
-
-    // ========================================
     // PUBLIC SITE SETTINGS
-    // ========================================
-
-    if (
-      url.pathname === "/api/site-settings" &&
-      request.method === "GET"
-    ) {
+    if (url.pathname === "/api/site-settings" && request.method === "GET") {
       try {
-        const settings =
-          await getSiteSettings(env);
-
+        const settings = await getSiteSettings(env);
         return json(settings);
       } catch (error) {
         console.error(error);
-
-        return json(
-          {
-            error: "Could not load site settings"
-          },
-          500
-        );
+        return json({ error: "Could not load site settings" }, 500);
       }
     }
 
-
-    // ========================================
-    // ADMIN SITE SETTINGS
-    // ========================================
-
-    if (
-      url.pathname === "/api/admin/site-settings" &&
-      request.method === "GET"
-    ) {
-      if (!(await requireAdmin(request, env))) {
-        return json(
-          { error: "Unauthorized" },
-          401
-        );
-      }
-
+    // ADMIN SITE SETTINGS GET
+    if (url.pathname === "/api/admin/site-settings" && request.method === "GET") {
+      if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
-        const settings =
-          await getSiteSettings(env);
-
+        const settings = await getSiteSettings(env);
         return json(settings);
       } catch (error) {
         console.error(error);
-
-        return json(
-          {
-            error: "Could not load settings"
-          },
-          500
-        );
+        return json({ error: "Could not load settings" }, 500);
       }
     }
 
-
-    if (
-      url.pathname === "/api/admin/site-settings" &&
-      request.method === "PUT"
-    ) {
-      if (!(await requireAdmin(request, env))) {
-        return json(
-          { error: "Unauthorized" },
-          401
-        );
-      }
-
+    // ADMIN SITE SETTINGS PUT
+    if (url.pathname === "/api/admin/site-settings" && request.method === "PUT") {
+      if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
         const body = await request.json();
-
-        if (
-          !body ||
-          typeof body !== "object" ||
-          Array.isArray(body)
-        ) {
-          return json(
-            { error: "Invalid settings" },
-            400
-          );
+        if (!body || typeof body !== "object" || Array.isArray(body)) {
+          return json({ error: "Invalid settings" }, 400);
         }
 
-        const entries =
-          Object.entries(body);
-
-        const statements = entries.map(
-          ([key, value]) => {
-            return env.DB.prepare(
-              `INSERT INTO site_settings
-               (key, value)
-               VALUES (?, ?)
-               ON CONFLICT(key)
-               DO UPDATE SET value = excluded.value`
-            ).bind(
-              String(key),
-              String(value ?? "")
-            );
-          }
+        const entries = Object.entries(body);
+        const statements = entries.map(([key, value]) =>
+          env.DB.prepare(
+            `INSERT INTO site_settings (key, value) VALUES (?, ?)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+          ).bind(String(key), String(value ?? ""))
         );
 
-        if (statements.length) {
-          await env.DB.batch(statements);
-        }
-
-        return json({
-          ok: true
-        });
+        if (statements.length) await env.DB.batch(statements);
+        return json({ ok: true });
       } catch (error) {
         console.error(error);
-
-        return json(
-          {
-            error: "Could not save settings"
-          },
-          500
-        );
+        return json({ error: "Could not save settings" }, 500);
       }
     }
 
-
-    // ========================================
     // PUBLIC SHOWCASE
-    // ========================================
-
-    if (
-      url.pathname === "/api/showcase" &&
-      request.method === "GET"
-    ) {
+    if (url.pathname === "/api/showcase" && request.method === "GET") {
       try {
-        const { results } =
-          await env.DB.prepare(
-            `SELECT id,
-                    title,
-                    category,
-                    description,
-                    image,
-                    link,
-                    sort_order
-             FROM showcase_items
-             ORDER BY sort_order ASC, id ASC`
-          ).all();
-
+        const { results } = await env.DB.prepare(
+          `SELECT id, title, category, description, image, link, sort_order FROM showcase_items ORDER BY sort_order ASC, id ASC`
+        ).all();
         return json(results || []);
       } catch (error) {
         console.error(error);
-
-        return json(
-          {
-            error: "Could not load showcase"
-          },
-          500
-        );
+        return json({ error: "Could not load showcase" }, 500);
       }
     }
 
-
-    // ========================================
     // ADMIN SHOWCASE GET
-    // ========================================
-
-    if (
-      url.pathname === "/api/admin/showcase" &&
-      request.method === "GET"
-    ) {
-      if (!(await requireAdmin(request, env))) {
-        return json(
-          { error: "Unauthorized" },
-          401
-        );
-      }
-
-      const { results } =
-        await env.DB.prepare(
-          `SELECT id,
-                  title,
-                  category,
-                  description,
-                  image,
-                  link,
-                  sort_order
-           FROM showcase_items
-           ORDER BY sort_order ASC, id ASC`
-        ).all();
-
+    if (url.pathname === "/api/admin/showcase" && request.method === "GET") {
+      if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
+      const { results } = await env.DB.prepare(
+        `SELECT id, title, category, description, image, link, sort_order FROM showcase_items ORDER BY sort_order ASC, id ASC`
+      ).all();
       return json(results || []);
     }
 
-
-    // ========================================
     // ADD SHOWCASE ITEM
-    // ========================================
-
-    if (
-      url.pathname === "/api/admin/showcase" &&
-      request.method === "POST"
-    ) {
-      if (!(await requireAdmin(request, env))) {
-        return json(
-          { error: "Unauthorized" },
-          401
-        );
-      }
-
+    if (url.pathname === "/api/admin/showcase" && request.method === "POST") {
+      if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
-        const body =
-          await request.json();
+        const body = await request.json();
+        if (!body.title) return json({ error: "Title is required" }, 400);
 
-        if (!body.title) {
-          return json(
-            {
-              error: "Title is required"
-            },
-            400
-          );
-        }
+        const max = await env.DB.prepare(
+          `SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM showcase_items`
+        ).first();
+        const sortOrder = Number(max?.max_order || 0) + 1;
 
-        const max =
-          await env.DB.prepare(
-            `SELECT COALESCE(
-              MAX(sort_order), 0
-            ) AS max_order
-             FROM showcase_items`
-          ).first();
+        const result = await env.DB.prepare(
+          `INSERT INTO showcase_items (title, category, description, image, link, sort_order) VALUES (?, ?, ?, ?, ?, ?)`
+        ).bind(
+          body.title,
+          body.category || "",
+          body.description || "",
+          body.image || "",
+          body.link || "",
+          sortOrder
+        ).run();
 
-        const sortOrder =
-          Number(max?.max_order || 0) + 1;
-
-        const result =
-          await env.DB.prepare(
-            `INSERT INTO showcase_items
-             (
-               title,
-               category,
-               description,
-               image,
-               link,
-               sort_order
-             )
-             VALUES (?, ?, ?, ?, ?, ?)`
-          )
-            .bind(
-              body.title,
-              body.category || "",
-              body.description || "",
-              body.image || "",
-              body.link || "",
-              sortOrder
-            )
-            .run();
-
-        return json({
-          ok: true,
-          id: result.meta.last_row_id
-        });
+        return json({ ok: true, id: result.meta.last_row_id });
       } catch (error) {
         console.error(error);
-
-        return json(
-          {
-            error: "Could not create item"
-          },
-          500
-        );
+        return json({ error: "Could not create item" }, 500);
       }
     }
 
-
-    // ========================================
     // EDIT SHOWCASE ITEM
-    // ========================================
-
-    if (
-      url.pathname.startsWith(
-        "/api/admin/showcase/"
-      ) &&
-      request.method === "PUT"
-    ) {
-      if (!(await requireAdmin(request, env))) {
-        return json(
-          { error: "Unauthorized" },
-          401
-        );
-      }
-
+    if (url.pathname.startsWith("/api/admin/showcase/") && request.method === "PUT") {
+      if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
-        const id =
-          url.pathname.split("/").pop();
-
-        const body =
-          await request.json();
+        const id = url.pathname.split("/").pop();
+        const body = await request.json();
 
         await env.DB.prepare(
-          `UPDATE showcase_items
-           SET title = ?,
-               category = ?,
-               description = ?,
-               image = ?,
-               link = ?
-           WHERE id = ?`
-        )
-          .bind(
-            body.title || "",
-            body.category || "",
-            body.description || "",
-            body.image || "",
-            body.link || "",
-            id
-          )
-          .run();
+          `UPDATE showcase_items SET title = ?, category = ?, description = ?, image = ?, link = ? WHERE id = ?`
+        ).bind(
+          body.title || "",
+          body.category || "",
+          body.description || "",
+          body.image || "",
+          body.link || "",
+          id
+        ).run();
 
-        return json({
-          ok: true
-        });
+        return json({ ok: true });
       } catch (error) {
         console.error(error);
-
-        return json(
-          {
-            error: "Could not update item"
-          },
-          500
-        );
+        return json({ error: "Could not update item" }, 500);
       }
     }
 
-
-    // ========================================
     // DELETE SHOWCASE ITEM
-    // ========================================
-
-    if (
-      url.pathname.startsWith(
-        "/api/admin/showcase/"
-      ) &&
-      request.method === "DELETE"
-    ) {
-      if (!(await requireAdmin(request, env))) {
-        return json(
-          { error: "Unauthorized" },
-          401
-        );
-      }
-
+    if (url.pathname.startsWith("/api/admin/showcase/") && request.method === "DELETE") {
+      if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
-        const id =
-          url.pathname.split("/").pop();
-
-        await env.DB.prepare(
-          `DELETE FROM showcase_items
-           WHERE id = ?`
-        )
-          .bind(id)
-          .run();
-
-        return json({
-          ok: true
-        });
+        const id = url.pathname.split("/").pop();
+        await env.DB.prepare(`DELETE FROM showcase_items WHERE id = ?`).bind(id).run();
+        return json({ ok: true });
       } catch (error) {
         console.error(error);
-
-        return json(
-          {
-            error: "Could not delete item"
-          },
-          500
-        );
+        return json({ error: "Could not delete item" }, 500);
       }
     }
 
-
-    // ========================================
     // REORDER SHOWCASE
-    // ========================================
-
-    if (
-      url.pathname ===
-        "/api/admin/showcase/reorder" &&
-      request.method === "POST"
-    ) {
-      if (!(await requireAdmin(request, env))) {
-        return json(
-          { error: "Unauthorized" },
-          401
-        );
-      }
-
+    if (url.pathname === "/api/admin/showcase/reorder" && request.method === "POST") {
+      if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
-        const body =
-          await request.json();
+        const body = await request.json();
+        if (!Array.isArray(body.ids)) return json({ error: "Invalid order" }, 400);
 
-        if (!Array.isArray(body.ids)) {
-          return json(
-            {
-              error: "Invalid order"
-            },
-            400
-          );
-        }
+        const statements = body.ids.map((id, index) =>
+          env.DB.prepare(`UPDATE showcase_items SET sort_order = ? WHERE id = ?`).bind(index + 1, id)
+        );
 
-        const statements =
-          body.ids.map(
-            (id, index) =>
-              env.DB.prepare(
-                `UPDATE showcase_items
-                 SET sort_order = ?
-                 WHERE id = ?`
-              ).bind(
-                index + 1,
-                id
-              )
-          );
-
-        if (statements.length) {
-          await env.DB.batch(
-            statements
-          );
-        }
-
-        return json({
-          ok: true
-        });
+        if (statements.length) await env.DB.batch(statements);
+        return json({ ok: true });
       } catch (error) {
         console.error(error);
-
-        return json(
-          {
-            error: "Could not reorder items"
-          },
-          500
-        );
+        return json({ error: "Could not reorder items" }, 500);
       }
     }
 
-
-    // ========================================
     // ADMIN GD LEVELS GET
-    // ========================================
-
-    if (
-      (url.pathname === "/api/admin/levels" ||
-       url.pathname === "/api/admin/gd-levels") &&
-      request.method === "GET"
-    ) {
-      if (!(await requireAdmin(request, env))) {
-        return json({ error: "Unauthorized" }, 401);
-      }
-
+    if ((url.pathname === "/api/admin/levels" || url.pathname === "/api/admin/gd-levels") && request.method === "GET") {
+      if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
         const levels = await getAllLevels(env);
         return json(levels);
@@ -882,20 +608,9 @@ export default {
       }
     }
 
-
-    // ========================================
     // ADD GD LEVEL
-    // ========================================
-
-    if (
-      (url.pathname === "/api/admin/levels" ||
-       url.pathname === "/api/admin/gd-levels") &&
-      request.method === "POST"
-    ) {
-      if (!(await requireAdmin(request, env))) {
-        return json({ error: "Unauthorized" }, 401);
-      }
-
+    if ((url.pathname === "/api/admin/levels" || url.pathname === "/api/admin/gd-levels") && request.method === "POST") {
+      if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
         await ensureLevelsTable(env);
         const body = await request.json();
@@ -903,50 +618,27 @@ export default {
         const title = cleanStr(body.title || body.name || "");
         const levelId = cleanStr(body.level_id || body.levelId || Date.now());
 
-        if (!title && !levelId) {
-          return json({ error: "Title or Level ID is required" }, 400);
-        }
+        if (!title && !levelId) return json({ error: "Title or Level ID is required" }, 400);
 
         const videoLink = cleanStr(body.video || body.video_url || body.youtube || body.link || "");
         const creator = cleanStr(body.creator || body.author || "");
-        const difficulty = cleanStr(body.difficulty || "");
+        const difficulty = cleanStr(body.difficulty || body.rating || body.featured || "Unrated");
         const description = cleanStr(body.description || "");
 
-        const max = await env.DB.prepare(
-          `SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM levels`
-        ).first();
-
+        const max = await env.DB.prepare(`SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM levels`).first();
         const sortOrder = Number(max?.max_order || 0) + 1;
 
-        const existing = await env.DB.prepare(
-          `SELECT id FROM levels WHERE level_id = ?`
-        ).bind(levelId).first();
+        const existing = await env.DB.prepare(`SELECT id FROM levels WHERE level_id = ?`).bind(levelId).first();
 
         if (existing) {
           await env.DB.prepare(
-            `UPDATE levels SET
-               title = ?, name = ?, creator = ?, description = ?,
-               video = ?, video_url = ?, link = ?, difficulty = ?, is_deleted = 0
-             WHERE level_id = ?`
-          ).bind(
-            title, title, creator,
-            description, videoLink, videoLink,
-            String(body.link || videoLink), difficulty, levelId
-          ).run();
-
+            `UPDATE levels SET title = ?, name = ?, creator = ?, description = ?, video = ?, video_url = ?, link = ?, difficulty = ?, is_deleted = 0 WHERE level_id = ?`
+          ).bind(title, title, creator, description, videoLink, videoLink, String(body.link || videoLink), difficulty, levelId).run();
           return json({ ok: true, id: existing.id });
         } else {
           const result = await env.DB.prepare(
-            `INSERT INTO levels (
-               level_id, title, name, creator, description,
-               video, video_url, link, difficulty, sort_order, is_deleted
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
-          ).bind(
-            levelId, title, title, creator,
-            description, videoLink, videoLink,
-            String(body.link || videoLink), difficulty, sortOrder
-          ).run();
-
+            `INSERT INTO levels (level_id, title, name, creator, description, video, video_url, link, difficulty, sort_order, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
+          ).bind(levelId, title, title, creator, description, videoLink, videoLink, String(body.link || videoLink), difficulty, sortOrder).run();
           return json({ ok: true, id: result.meta?.last_row_id || levelId });
         }
       } catch (error) {
@@ -955,21 +647,13 @@ export default {
       }
     }
 
-
-    // ========================================
     // EDIT GD LEVEL
-    // ========================================
-
     if (
-      (url.pathname.startsWith("/api/admin/levels/") ||
-       url.pathname.startsWith("/api/admin/gd-levels/")) &&
+      (url.pathname.startsWith("/api/admin/levels/") || url.pathname.startsWith("/api/admin/gd-levels/")) &&
       !url.pathname.endsWith("/reorder") &&
       request.method === "PUT"
     ) {
-      if (!(await requireAdmin(request, env))) {
-        return json({ error: "Unauthorized" }, 401);
-      }
-
+      if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
         await ensureLevelsTable(env);
         const id = url.pathname.split("/").pop();
@@ -979,35 +663,19 @@ export default {
         const videoLink = cleanStr(body.video || body.video_url || body.youtube || body.link || "");
         const levelId = cleanStr(body.level_id || body.levelId || id);
         const creator = cleanStr(body.creator || body.author || "");
-        const difficulty = cleanStr(body.difficulty || "");
+        const difficulty = cleanStr(body.difficulty || body.rating || body.featured || "Unrated");
         const description = cleanStr(body.description || "");
 
-        const existing = await env.DB.prepare(
-          `SELECT id FROM levels WHERE level_id = ? OR id = ?`
-        ).bind(levelId, id).first();
+        const existing = await env.DB.prepare(`SELECT id FROM levels WHERE level_id = ? OR id = ?`).bind(levelId, id).first();
 
         if (existing) {
           await env.DB.prepare(
-            `UPDATE levels SET
-               title = ?, name = ?, creator = ?, description = ?,
-               video = ?, video_url = ?, link = ?, difficulty = ?, is_deleted = 0
-             WHERE id = ?`
-          ).bind(
-            title, title, creator,
-            description, videoLink, videoLink,
-            String(body.link || videoLink), difficulty, existing.id
-          ).run();
+            `UPDATE levels SET title = ?, name = ?, creator = ?, description = ?, video = ?, video_url = ?, link = ?, difficulty = ?, is_deleted = 0 WHERE id = ?`
+          ).bind(title, title, creator, description, videoLink, videoLink, String(body.link || videoLink), difficulty, existing.id).run();
         } else {
           await env.DB.prepare(
-            `INSERT INTO levels (
-               level_id, title, name, creator, description,
-               video, video_url, link, difficulty, is_deleted
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
-          ).bind(
-            levelId, title, title, creator,
-            description, videoLink, videoLink,
-            String(body.link || videoLink), difficulty
-          ).run();
+            `INSERT INTO levels (level_id, title, name, creator, description, video, video_url, link, difficulty, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
+          ).bind(levelId, title, title, creator, description, videoLink, videoLink, String(body.link || videoLink), difficulty).run();
         }
 
         return json({ ok: true });
@@ -1017,28 +685,18 @@ export default {
       }
     }
 
-
-    // ========================================
     // DELETE GD LEVEL
-    // ========================================
-
     if (
-      (url.pathname.startsWith("/api/admin/levels/") ||
-       url.pathname.startsWith("/api/admin/gd-levels/")) &&
+      (url.pathname.startsWith("/api/admin/levels/") || url.pathname.startsWith("/api/admin/gd-levels/")) &&
       !url.pathname.endsWith("/reorder") &&
       request.method === "DELETE"
     ) {
-      if (!(await requireAdmin(request, env))) {
-        return json({ error: "Unauthorized" }, 401);
-      }
-
+      if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
         await ensureLevelsTable(env);
         const id = String(url.pathname.split("/").pop());
 
-        const existing = await env.DB.prepare(
-          `SELECT id FROM levels WHERE level_id = ? OR id = ?`
-        ).bind(id, id).first();
+        const existing = await env.DB.prepare(`SELECT id FROM levels WHERE level_id = ? OR id = ?`).bind(id, id).first();
 
         if (existing) {
           await env.DB.prepare(`UPDATE levels SET is_deleted = 1 WHERE id = ?`).bind(existing.id).run();
@@ -1053,44 +711,27 @@ export default {
       }
     }
 
-
-    // ========================================
     // REORDER GD LEVELS
-    // ========================================
-
     if (
-      (url.pathname === "/api/admin/levels/reorder" ||
-       url.pathname === "/api/admin/gd-levels/reorder") &&
+      (url.pathname === "/api/admin/levels/reorder" || url.pathname === "/api/admin/gd-levels/reorder") &&
       request.method === "POST"
     ) {
-      if (!(await requireAdmin(request, env))) {
-        return json({ error: "Unauthorized" }, 401);
-      }
-
+      if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
         await ensureLevelsTable(env);
         const body = await request.json();
-
-        if (!Array.isArray(body.ids)) {
-          return json({ error: "Invalid order" }, 400);
-        }
+        if (!Array.isArray(body.ids)) return json({ error: "Invalid order" }, 400);
 
         for (let index = 0; index < body.ids.length; index++) {
           const idStr = String(body.ids[index]);
           const order = index + 1;
 
-          const existing = await env.DB.prepare(
-            `SELECT id FROM levels WHERE level_id = ? OR id = ?`
-          ).bind(idStr, idStr).first();
+          const existing = await env.DB.prepare(`SELECT id FROM levels WHERE level_id = ? OR id = ?`).bind(idStr, idStr).first();
 
           if (existing) {
-            await env.DB.prepare(`UPDATE levels SET sort_order = ? WHERE id = ?`)
-              .bind(order, existing.id)
-              .run();
+            await env.DB.prepare(`UPDATE levels SET sort_order = ? WHERE id = ?`).bind(order, existing.id).run();
           } else {
-            await env.DB.prepare(`INSERT INTO levels (level_id, sort_order) VALUES (?, ?)`)
-              .bind(idStr, order)
-              .run();
+            await env.DB.prepare(`INSERT INTO levels (level_id, sort_order) VALUES (?, ?)`).bind(idStr, order).run();
           }
         }
 
@@ -1101,16 +742,9 @@ export default {
       }
     }
 
-
-    // ========================================
     // PUBLIC GEOMETRY DASH LEVELS
-    // ========================================
-
     if (
-      (url.pathname === "/api/levels" ||
-       url.pathname === "/api/gd-levels" ||
-       url.pathname === "/api/curated" ||
-       url.pathname === "/api/get-levels") &&
+      (url.pathname === "/api/levels" || url.pathname === "/api/gd-levels" || url.pathname === "/api/curated" || url.pathname === "/api/get-levels") &&
       request.method === "GET"
     ) {
       try {
@@ -1122,11 +756,7 @@ export default {
       }
     }
 
-
-    // ========================================
     // STATIC SITE
-    // ========================================
-
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
     }
