@@ -1103,9 +1103,12 @@ function renderPublicShowcase(
 
 async function loadGdLevels() {
   try {
-    const response = await fetch('/tracked-levels.json', {
+    // Add timestamp query parameter to bypass browser/CDN edge caching
+    const response = await fetch(`/tracked-levels.json?_t=${Date.now()}`, {
       method: 'GET',
-      cache: 'no-store'
+      headers: {
+        'Cache-Control': 'no-cache'
+      }
     });
 
     if (!response.ok) {
@@ -1115,7 +1118,7 @@ async function loadGdLevels() {
     const items = await response.json();
 
     if (!Array.isArray(items)) {
-      throw new Error('Invalid tracked levels JSON response');
+      throw new Error('Invalid tracked levels format');
     }
 
     gdLevelItems = items;
