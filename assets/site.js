@@ -1180,7 +1180,7 @@ function renderPublicGdLevels(items) {
   }).join('');
 }
 
-// yes
+// =====================================
 // RENDER CATEGORY CONTAINER
 // =====================================
 
@@ -1194,22 +1194,21 @@ function renderCategoryContainer(containerId, levelArray) {
   }
 
   container.innerHTML = levelArray.map(level => `
-    <div class="level-card" data-level-id="${level.id}">
+    <div class="level-card" data-level-id="${level.id || ''}">
       <div class="level-header">
-        <h3>${level.name}</h3>
-        <span class="level-id">#${level.id}</span>
+        <h3>${level.name || 'Unnamed'}</h3>
+        <span class="level-id">#${level.id || ''}</span>
       </div>
-      <p class="author">By <strong>${level.author}</strong></p>
+      <p class="author">By <strong>${level.author || 'Unknown'}</strong></p>
       <div class="level-stats">
-        <span>⭐ ${level.stars}</span>
-        <span>📥 ${Number(level.downloads).toLocaleString()}</span>
-        <span>❤️ ${Number(level.likes).toLocaleString()}</span>
+        <span>⭐ ${level.stars ?? 0}</span>
+        <span>📥 ${Number(level.downloads || 0).toLocaleString()}</span>
+        <span>❤️ ${Number(level.likes || 0).toLocaleString()}</span>
       </div>
-      <p class="song-info">🎵 ${level.song}</p>
+      <p class="song-info">🎵 ${level.song || 'Unknown Song'}</p>
     </div>
   `).join('');
 }
-
 // ==========================================
 // CREATE ADMIN PANEL
 // ==========================================
