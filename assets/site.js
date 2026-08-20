@@ -1134,12 +1134,35 @@ async function loadGdLevels() {
 // ==========================================
 
 function renderPublicGdLevels(items) {
-  // Clear grid container to only show the table view
-  const archive = document.getElementById('archive');
-  if (archive) {
-    const grid = archive.querySelector('.grid, .syx-archive-grid');
-    if (grid) grid.innerHTML = '';
-  }
+  // Normalize properties so it works regardless of source
+  const normalizedLevels = items.map(l => ({
+    id: l.id || l.level_id,
+    name: l.name || l.title || 'Unnamed Level',
+    author: l.author || l.creator || 'Unknown',
+    sourceType: l.sourceType || 'manual',
+    downloads: l.downloads || 0,
+    likes: l.likes || 0,
+    stars: l.difficulty?.stars ?? l.stars ?? 0,
+    song: l.song || 'Unknown Song'
+  }));
+
+  // Separate into categories
+  const soloLevels = normalizedLevels.filter(l => 
+    l.sourceType === 'profile' || l.author.toLowerCase() === 'syxpher'
+  );
+  
+  const collabLevels = normalizedLevels.filter(l => 
+    l.sourceType === 'list' || (l.author.toLowerCase() !== 'syxpher' && l.sourceType !== 'manual')
+  );
+  
+  const manualLevels = normalizedLevels.filter(l => 
+    l.sourceType === 'manual'
+  );
+
+  // Pass to your UI containers
+  renderCategoryContainer('solo-container', soloLevels);
+  renderCategoryContainer('collab-container', collabLevels);
+  renderCategoryContainer('manual-container', manualLevels);
 }
 
 // ==========================================
