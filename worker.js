@@ -169,7 +169,7 @@ async function requireAdmin(request, env) {
 
 
 // ==========================================
-// SITE SETTINGS
+// SITE SETTINGS & TABLE HELPERS
 // ==========================================
 
 async function getSiteSettings(env) {
@@ -188,9 +188,31 @@ async function getSiteSettings(env) {
   return settings;
 }
 
+async function ensureLevelsTable(env) {
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS levels (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        level_id TEXT,
+        title TEXT,
+        name TEXT,
+        creator TEXT,
+        description TEXT,
+        video TEXT,
+        video_url TEXT,
+        link TEXT,
+        difficulty TEXT,
+        sort_order INTEGER DEFAULT 0
+      )
+    `).run();
+  } catch (e) {
+    console.error("Could not initialize levels table:", e);
+  }
+}
+
 
 // ==========================================
-// WORKER
+// WORKER MAIN
 // ==========================================
 
 export default {
@@ -677,11 +699,282 @@ export default {
 
 
     // ========================================
-    // GEOMETRY DASH LEVELS
+    // ADMIN GD LEVELS GET
     // ========================================
 
     if (
-      url.pathname === "/api/levels"
+      (url.pathname === "/api/admin/levels" ||
+       url.pathname === "/api/admin/gd-levels") &&
+      request.method === "GET"
+    ) {
+      if (!(await requireAdmin(request, env))) {
+        return json(
+          { error: "Unauthorized" },
+          401
+        );
+      }
+
+      try {
+        await ensureLevelsTable(env);
+        const { results } =
+          await env.DB.prepare(
+            `SELECT * FROM levels
+             ORDER BY sort_order ASC, id ASC`
+          ).all();
+
+        return json(results || []);
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          {
+            error: "Could not load levels"
+          },
+          500
+        );
+      }
+    }
+
+
+    // ========================================
+    // ADD GD LEVEL
+    // ========================================
+
+    if (
+      (url.pathname === "/api/admin/levels" ||
+       url.pathname === "/api/admin/gd-levels") &&
+      request.method === "POST"
+    ) {
+      if (!(await requireAdmin(request, env))) {
+        return json(
+          { error: "Unauthorized" },
+          401
+        );
+      }
+
+      try {
+        await ensureLevelsTable(env);
+        const body = await request.json();
+
+        const title = body.title || body.name || "";
+        if (!title && !body.level_id) {
+          return json(
+            { error: "Title or Level ID is required" },
+            400
+          );
+        }
+
+        const max = await env.DB.prepare(
+          `SELECT COALESCE(MAX(sort_order), 0) AS max_order FROM levels`
+        ).first();
+
+        const sortOrder = Number(max?.max_order || 0) + 1;
+
+        const videoLink = String(body.video || body.video_url || body.youtube || body.link || "");
+
+        const result = await env.DB.prepare(
+          `INSERT INTO levels (
+             level_id,
+             title,
+             name,
+             creator,
+             description,
+             video,
+             video_url,
+             link,
+             difficulty,
+             sort_order
+           )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+          .bind(
+            String(body.level_id || body.levelId || ""),
+            String(title),
+            String(title),
+            String(body.creator || body.author || ""),
+            String(body.description || ""),
+            videoLink,
+            videoLink,
+            String(body.link || videoLink),
+            String(body.difficulty || ""),
+            sortOrder
+          )
+          .run();
+
+        return json({
+          ok: true,
+          id: result.meta.last_row_id
+        });
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          { error: "Could not create level" },
+          500
+        );
+      }
+    }
+
+
+    // ========================================
+    // EDIT GD LEVEL
+    // ========================================
+
+    if (
+      (url.pathname.startsWith("/api/admin/levels/") ||
+       url.pathname.startsWith("/api/admin/gd-levels/")) &&
+      !url.pathname.endsWith("/reorder") &&
+      request.method === "PUT"
+    ) {
+      if (!(await requireAdmin(request, env))) {
+        return json(
+          { error: "Unauthorized" },
+          401
+        );
+      }
+
+      try {
+        await ensureLevelsTable(env);
+        const id = url.pathname.split("/").pop();
+        const body = await request.json();
+
+        const title = body.title || body.name || "";
+        const videoLink = String(body.video || body.video_url || body.youtube || body.link || "");
+
+        await env.DB.prepare(
+          `UPDATE levels
+           SET level_id = ?,
+               title = ?,
+               name = ?,
+               creator = ?,
+               description = ?,
+               video = ?,
+               video_url = ?,
+               link = ?,
+               difficulty = ?
+           WHERE id = ?`
+        )
+          .bind(
+            String(body.level_id || body.levelId || ""),
+            String(title),
+            String(title),
+            String(body.creator || body.author || ""),
+            String(body.description || ""),
+            videoLink,
+            videoLink,
+            String(body.link || videoLink),
+            String(body.difficulty || ""),
+            id
+          )
+          .run();
+
+        return json({ ok: true });
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          { error: "Could not update level" },
+          500
+        );
+      }
+    }
+
+
+    // ========================================
+    // DELETE GD LEVEL
+    // ========================================
+
+    if (
+      (url.pathname.startsWith("/api/admin/levels/") ||
+       url.pathname.startsWith("/api/admin/gd-levels/")) &&
+      !url.pathname.endsWith("/reorder") &&
+      request.method === "DELETE"
+    ) {
+      if (!(await requireAdmin(request, env))) {
+        return json(
+          { error: "Unauthorized" },
+          401
+        );
+      }
+
+      try {
+        await ensureLevelsTable(env);
+        const id = url.pathname.split("/").pop();
+
+        await env.DB.prepare(
+          `DELETE FROM levels WHERE id = ?`
+        )
+          .bind(id)
+          .run();
+
+        return json({ ok: true });
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          { error: "Could not delete level" },
+          500
+        );
+      }
+    }
+
+
+    // ========================================
+    // REORDER GD LEVELS
+    // ========================================
+
+    if (
+      (url.pathname === "/api/admin/levels/reorder" ||
+       url.pathname === "/api/admin/gd-levels/reorder") &&
+      request.method === "POST"
+    ) {
+      if (!(await requireAdmin(request, env))) {
+        return json(
+          { error: "Unauthorized" },
+          401
+        );
+      }
+
+      try {
+        await ensureLevelsTable(env);
+        const body = await request.json();
+
+        if (!Array.isArray(body.ids)) {
+          return json(
+            { error: "Invalid order" },
+            400
+          );
+        }
+
+        const statements = body.ids.map((id, index) =>
+          env.DB.prepare(
+            `UPDATE levels SET sort_order = ? WHERE id = ?`
+          ).bind(index + 1, id)
+        );
+
+        if (statements.length) {
+          await env.DB.batch(statements);
+        }
+
+        return json({ ok: true });
+      } catch (error) {
+        console.error(error);
+
+        return json(
+          { error: "Could not reorder levels" },
+          500
+        );
+      }
+    }
+
+
+    // ========================================
+    // PUBLIC GEOMETRY DASH LEVELS
+    // ========================================
+
+    if (
+      url.pathname === "/api/levels" &&
+      request.method === "GET"
     ) {
       try {
         const response =
@@ -695,32 +988,33 @@ export default {
             }
           );
 
-        return new Response(
-          response.body,
-          {
-            status:
-              response.status,
-            headers: {
-              "Content-Type":
-                response.headers.get(
-                  "Content-Type"
-                ) ||
-                "application/json",
-              "Cache-Control":
-                "no-store"
+        if (response.ok) {
+          return new Response(
+            response.body,
+            {
+              status: response.status,
+              headers: {
+                "Content-Type":
+                  response.headers.get("Content-Type") || "application/json",
+                "Cache-Control": "no-store"
+              }
             }
-          }
-        );
+          );
+        }
       } catch (error) {
-        console.error(error);
+        console.error("Cloud Run GD fetch failed, falling back to D1:", error);
+      }
 
-        return json(
-          {
-            error:
-              "Geometry Dash API unavailable"
-          },
-          502
-        );
+      // Fallback to D1 levels if external fetch fails
+      try {
+        await ensureLevelsTable(env);
+        const { results } = await env.DB.prepare(
+          `SELECT * FROM levels ORDER BY sort_order ASC, id ASC`
+        ).all();
+
+        return json(results || []);
+      } catch {
+        return json({ error: "Geometry Dash API unavailable" }, 502);
       }
     }
 
