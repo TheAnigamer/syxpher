@@ -878,31 +878,6 @@ function applySiteSettings() {
 }
 
 // ==========================================
-// GD TRACKED LEVELS LOADER
-// ==========================================
-
-let gdLevels = [];
-
-async function loadGDLevels() {
-  try {
-    const response = await fetch('/tracked-levels.json', { cache: 'no-store' });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-
-    gdLevels = await response.json();
-
-    // Call your render function to draw the levels on the screen:
-    renderLevels(); 
-
-  } catch (error) {
-    console.error('Failed to load tracked levels:', error);
-  }
-}
-
-
-// ==========================================
 // PUBLIC SHOWCASE LOADER
 // ==========================================
 
