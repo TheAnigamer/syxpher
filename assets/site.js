@@ -4441,7 +4441,6 @@ document.addEventListener(
 
     loadShowcase();
 
-    loadGDLevels();
 
   }
 );
