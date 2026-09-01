@@ -3,7 +3,7 @@
     "id": "145707866",
     "name": "denominator",
     "author": "Syxpher",
-    "downloads": 634810,
+    "downloads": 634828,
     "likes": 35523,
     "difficulty": {
       "stars": 6,
@@ -17,8 +17,8 @@
       "epic": false
     },
     "song": "Denominator",
-    "sourceType": "profile",
-    "sourceKey": "syxpher"
+    "sourceType": "list",
+    "sourceKey": "2638783"
   },
   {
     "id": "143932804",
@@ -38,8 +38,8 @@
       "epic": false
     },
     "song": "Snowy roads",
-    "sourceType": "profile",
-    "sourceKey": "syxpher"
+    "sourceType": "list",
+    "sourceKey": "2638783"
   },
   {
     "id": "142993192",
@@ -59,8 +59,8 @@
       "epic": false
     },
     "song": "Kosmonaut",
-    "sourceType": "profile",
-    "sourceKey": "syxpher"
+    "sourceType": "list",
+    "sourceKey": "2638783"
   },
   {
     "id": "132539558",
@@ -80,8 +80,8 @@
       "epic": false
     },
     "song": "Creo - Glome",
-    "sourceType": "profile",
-    "sourceKey": "syxpher"
+    "sourceType": "list",
+    "sourceKey": "2638783"
   },
   {
     "id": "123329278",
@@ -101,14 +101,14 @@
       "epic": false
     },
     "song": "Every End...",
-    "sourceType": "profile",
-    "sourceKey": "syxpher"
+    "sourceType": "list",
+    "sourceKey": "2638783"
   },
   {
     "id": "127795261",
     "name": "TURNING VIOLENT",
     "author": "LupoDZN",
-    "downloads": 56128,
+    "downloads": 56130,
     "likes": 1833,
     "difficulty": {
       "stars": 10,
