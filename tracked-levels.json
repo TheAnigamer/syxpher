@@ -3,7 +3,7 @@
     "id": "145707866",
     "name": "denominator",
     "author": "Syxpher",
-    "downloads": 642839,
+    "downloads": 642850,
     "likes": 35797,
     "difficulty": {
       "stars": 6,
@@ -17,8 +17,8 @@
       "epic": false
     },
     "song": "Denominator",
-    "sourceType": "profile",
-    "sourceKey": "syxpher"
+    "sourceType": "list",
+    "sourceKey": "2638783"
   },
   {
     "id": "143932804",
@@ -38,8 +38,8 @@
       "epic": false
     },
     "song": "Snowy roads",
-    "sourceType": "profile",
-    "sourceKey": "syxpher"
+    "sourceType": "list",
+    "sourceKey": "2638783"
   },
   {
     "id": "142993192",
@@ -59,14 +59,14 @@
       "epic": false
     },
     "song": "Kosmonaut",
-    "sourceType": "profile",
-    "sourceKey": "syxpher"
+    "sourceType": "list",
+    "sourceKey": "2638783"
   },
   {
     "id": "132539558",
     "name": "Not A Platformer ",
     "author": "Syxpher",
-    "downloads": 8073,
+    "downloads": 8075,
     "likes": 601,
     "difficulty": {
       "stars": 7,
@@ -80,8 +80,8 @@
       "epic": false
     },
     "song": "Creo - Glome",
-    "sourceType": "profile",
-    "sourceKey": "syxpher"
+    "sourceType": "list",
+    "sourceKey": "2638783"
   },
   {
     "id": "123329278",
@@ -101,8 +101,8 @@
       "epic": false
     },
     "song": "Every End...",
-    "sourceType": "profile",
-    "sourceKey": "syxpher"
+    "sourceType": "list",
+    "sourceKey": "2638783"
   },
   {
     "id": "127795261",
