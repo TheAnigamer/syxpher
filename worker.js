@@ -143,21 +143,32 @@ async function verifyAdminToken(token, env) {
   }
 }
 
-function json(data, status = 200) {
+function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json",
       "Cache-Control": "no-store",
-      "Access-Control-Allow-Origin": "*"
+      "Access-Control-Allow-Origin": "*",
+      ...extraHeaders
     }
   });
 }
 
 async function requireAdmin(request, env) {
   const auth = request.headers.get("Authorization") || "";
-  if (!auth.startsWith("Bearer ")) return false;
-  return verifyAdminToken(auth.slice(7), env);
+  if (auth.startsWith("Bearer ")) {
+    return verifyAdminToken(auth.slice(7), env);
+  }
+  
+  // Fallback: Check cookies for admin session
+  const cookieHeader = request.headers.get("Cookie") || "";
+  const match = cookieHeader.match(/admin_token=([^;]+)/);
+  if (match) {
+    return verifyAdminToken(match[1], env);
+  }
+  
+  return false;
 }
 
 function cleanStr(val) {
@@ -208,10 +219,6 @@ function getLevelDifficulty(botItem, d1Item) {
 
   return "Unrated";
 }
-
-// ==========================================
-// DB & MIGRATION HELPERS
-// ==========================================
 
 async function getSiteSettings(env) {
   const { results } = await env.DB.prepare(
@@ -413,26 +420,97 @@ async function getAllLevels(env) {
   return combined;
 }
 
-// ==========================================
-// WORKER MAIN
-// ==========================================
+// Helper for serving the clean login challenge page
+function getLoginHtml() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Restricted Access</title>
+  <style>
+    body { background: #0a0a0b; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .box { background: #111; border: 1px solid rgba(255,255,255,0.1); padding: 2rem; max-width: 340px; width: 100%; text-align: center; }
+    input { width: 100%; padding: 0.75rem; background: #0a0a0b; border: 1px solid rgba(255,255,255,0.2); color: #fff; margin-bottom: 1rem; box-sizing: border-box; font-family: monospace; }
+    input:focus { border-color: #ff9e00; outline: none; }
+    button { width: 100%; padding: 0.75rem; background: #ff9e00; border: none; color: #0a0a0b; font-weight: bold; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; }
+    button:hover { opacity: 0.9; }
+    .error { color: #ff4444; font-size: 0.8rem; margin-top: 0.5rem; display: none; }
+    label { display: block; text-align: left; font-size: 0.75rem; margin-bottom: 0.3rem; color: #aaa; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h3>SECURE ACCESS</h3>
+    <form id="login-form">
+      <label for="password">Password</label>
+      <input type="password" id="password" required autocomplete="current-password">
+      
+      <label for="code">Authenticator Code</label>
+      <input type="text" id="code" pattern="\\d{6}" maxlength="6" required autocomplete="one-time-code" placeholder="000000">
+      
+      <button type="submit">Verify</button>
+      <div id="error-msg" class="error">Access Denied: Invalid Credentials</div>
+    </form>
+  </div>
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pass = document.getElementById('password').value;
+      const code = document.getElementById('code').value;
+      const errorMsg = document.getElementById('error-msg');
+      
+      try {
+        const res = await fetch('/api/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pass, code: code })
+        });
+        
+        const data = await res.json();
+        if (data.ok) {
+          window.location.reload();
+        } else {
+          errorMsg.style.display = 'block';
+        }
+      } catch (err) {
+        errorMsg.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>`;
+}
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // ADMIN LOGIN
+    // ADMIN LOGIN / VERIFY API
     if (url.pathname === "/api/verify" && request.method === "POST") {
       try {
         const body = await request.json();
         const code = String(body.code || "");
-        if (!/^\d{6}$/.test(code)) return json({ ok: false }, 400);
+        const password = String(body.password || "");
+        
+        const correctPassword = env.ADMINPASSSYXPHER || "";
+        
+        // Check password if provided in the body
+        if (password && password !== correctPassword) {
+          return json({ ok: false }, 401);
+        }
 
+        // Validate TOTP code
+        if (!/^\d{6}$/.test(code)) return json({ ok: false }, 400);
         const valid = await verifyTOTP(env.TOTP_SECRET, code);
-        if (!valid) return json({ ok: false });
+        if (!valid) return json({ ok: false }, 401);
 
         const token = await createAdminToken(env);
-        return json({ ok: true, token });
+        
+        // Return success and set a secure HttpOnly cookie valid for 7 days
+        return json({ ok: true, token }, 200, {
+          "Set-Cookie": `admin_token=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=604800`
+        });
       } catch (error) {
         console.error(error);
         return json({ ok: false }, 500);
@@ -742,7 +820,7 @@ export default {
       }
     }
 
-// PUBLIC GEOMETRY DASH LEVELS
+    // PUBLIC GEOMETRY DASH LEVELS
     if (
       (url.pathname === "/api/levels" || 
        url.pathname === "/api/gd-levels" || 
@@ -760,76 +838,24 @@ export default {
       }
     }
 
-    const response = await env.ASSETS.fetch(request);
-    const contentType = response.headers.get("content-type") || "";
+    // AUTH CHECK FOR STATIC ASSETS / HTML PAGES
+    const cookieHeader = request.headers.get("Cookie") || "";
+    const match = cookieHeader.match(/admin_token=([^;]+)/);
+    let isAuthenticated = false;
 
-    // If it's an HTML page, inject the password & authenticator checks directly into the text
-    if (contentType.includes("text/html")) {
-      let html = await response.text();
-      const correctPassword = env.ADMINPASSSYXPHER || "";
+    if (match) {
+      isAuthenticated = await verifyAdminToken(match[1], env);
+    }
 
-      const protectionScript = `
-        <script>
-          (async function() {
-            const CORRECT_PASSWORD = "${correctPassword}";
-
-            // 1. Password check FIRST
-            if (localStorage.getItem("auth_pass") !== CORRECT_PASSWORD) {
-              const passInput = prompt("Enter Password:");
-              if (passInput !== CORRECT_PASSWORD) {
-                document.documentElement.innerHTML = "<h3>Access Denied: Incorrect Password</h3>";
-                throw new Error("Unauthorized");
-              }
-              localStorage.setItem("auth_pass", passInput);
-            }
-
-            // 2. Authenticator code SECOND (Validated against your /api/verify backend)
-            if (localStorage.getItem("auth_verified") !== "true") {
-              const codeInput = prompt("Enter Authenticator Code:");
-              if (!codeInput) {
-                document.documentElement.innerHTML = "<h3>Access Denied: No Code Provided</h3>";
-                throw new Error("Unauthorized");
-              }
-
-              try {
-                const res = await fetch("/api/verify", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ code: codeInput })
-                });
-                const data = await res.json();
-                
-                if (!data.ok) {
-                  document.documentElement.innerHTML = "<h3>Access Denied: Incorrect Authenticator Code</h3>";
-                  throw new Error("Unauthorized");
-                }
-                
-                localStorage.setItem("auth_verified", "true");
-                if (data.token) {
-                  localStorage.setItem("admin_token", data.token);
-                }
-              } catch (e) {
-                document.documentElement.innerHTML = "<h3>Access Denied: Verification Failed</h3>";
-                throw new Error("Unauthorized");
-              }
-            }
-          })();
-        </script>
-      `;
-
-      // Inject right after the <head> tag
-      if (html.includes("<head>")) {
-        html = html.replace("<head>", "<head>" + protectionScript);
-      } else {
-        html = protectionScript + html;
-      }
-
-      return new Response(html, {
-        status: response.status,
-        headers: response.headers
+    if (!isAuthenticated) {
+      // Serve the clean login card instead of letting unauthenticated users fetch the site
+      return new Response(getLoginHtml(), {
+        status: 200,
+        headers: { "Content-Type": "text/html;charset=UTF-8" }
       });
     }
 
-    return response;
+    // If authenticated, serve assets normally with zero HTML modification
+    return env.ASSETS.fetch(request);
   }
 };
