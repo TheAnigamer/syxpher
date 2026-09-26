@@ -1,45 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
-<script>
-  (async function() {
-    if (localStorage.getItem("auth_pass_verified") !== "true") {
-      const pass = prompt("Enter Password:");
-      if (!pass) {
-        document.documentElement.innerHTML = "<h3>Access Denied</h3>";
-        throw new Error("Unauthorized");
-      }
-      try {
-        const res = await fetch("/api/verify-password", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password: pass })
-        });
-        const data = await res.json();
-        if (!data.ok) {
-          document.documentElement.innerHTML = "<h3>Access Denied: Incorrect Password</h3>";
-          throw new Error("Unauthorized");
-        }
-        localStorage.setItem("auth_pass_verified", "true");
-      } catch (e) {
-        document.documentElement.innerHTML = "<h3>Access Denied: Verification Failed</h3>";
-        throw new Error("Unauthorized");
-      }
-    }
-  })();
-</script>
+<head>
 <meta content="text/html; charset=utf-8" http-equiv="Content-Type"/>
-
 <link href="https://i.postimg.cc/6pp1KMMZ/http-gather-fandalism-com-hyperfollow-blob-image-7944355-bawgjsl9veofr6ac3tvrit-1738108440096.png" rel="icon" type="image/svg+xml"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <link href="./manifest.webmanifest" rel="manifest"/>
-<title>
-   Syxpher
-  </title>
+<title>Syxpher</title>
 <link crossorigin="" href="./assets/styles.css" rel="stylesheet"/>
 <meta content="yes" name="mobile-web-app-capable"/>
 <meta content="black" name="apple-mobile-web-app-status-bar-style"/>
 <meta content="Cubelytics" name="apple-mobile-web-app-title"/>
-<link href="./assets/netlify-fixes.css" rel="stylesheet"/><script defer="True" src="./assets/site.js"></script><script src="gd-levels.js" defer></script></script><meta content="Multimedia creative, video editor, motion graphics designer, game creator, and Geometry Dash builder." name="description"/></head>
+<link href="./assets/netlify-fixes.css" rel="stylesheet"/>
+<script defer src="./assets/site.js"></script>
+<script src="gd-levels.js" defer></script>
+<meta content="Multimedia creative, video editor, motion graphics designer, game creator, and Geometry Dash builder." name="description"/>
+</head>
 <body>
 <div id="root">
 <div class="relative min-h-screen">
@@ -393,7 +368,7 @@
 <tbody id="levels-tbody">
 <tr>
 <td class="py-6 px-4 font-mono-tech text-xs text-white/40" colspan="8">
-          Loading levels&#8230;
+          Loading levels…
          </td>
 </tr>
 </tbody>
@@ -401,7 +376,7 @@
 </div>
 <div class="px-6 md:px-12 mt-6">
 <p class="font-mono-tech text-xs text-white/30 uppercase tracking-widest">
-        <span id="levels-count">Loading levels&#8230;</span>
+        <span id="levels-count">Loading levels…</span>
        </p>
 </div>
 </section>
@@ -485,7 +460,7 @@
 </div>
 <div class="relative z-10 mt-20 md:mt-32 border-t border-white/10 pt-8 px-6 md:px-12 flex items-center justify-between flex-wrap gap-4">
 <span class="font-mono-tech text-xs text-white/30 uppercase tracking-widest">
-        © Syxpher 2026 · All Rights Reserved
+        © 2026 · All Rights Reserved
        </span>
 <span class="font-mono-tech text-xs text-white/30 uppercase tracking-widest">
         Built in the void
@@ -495,9 +470,80 @@
 </div>
 </div>
 <div class="fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]">
-<div class="fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]">
 </div>
 </div>
+
+<!-- Admin Password / TOTP Verification Modal Popup -->
+<div id="admin-modal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md hidden">
+  <div class="bg-[#111] border border-white/20 p-8 max-w-sm w-full relative shadow-2xl">
+    <h3 class="font-heading font-bold text-xl text-white mb-2">Admin Authentication</h3>
+    <p class="text-white/50 text-xs font-mono-tech mb-6">Enter your 6-digit authentication code.</p>
+    <input type="password" id="admin-code-input" maxlength="6" placeholder="******" class="w-full bg-[#0A0A0B] border border-white/20 px-4 py-3 text-white font-mono-tech text-center tracking-widest text-lg focus:border-[#FF9E00] focus:outline-none mb-4" autocomplete="one-time-code" />
+    <div class="flex gap-4">
+      <button id="admin-submit-btn" class="flex-1 bg-[#FF9E00] text-[#0A0A0B] font-mono-tech text-xs uppercase tracking-widest py-3 font-bold hover:bg-opacity-90 transition-colors cursor-pointer">Verify</button>
+      <button id="admin-cancel-btn" class="px-4 py-3 border border-white/20 text-white/60 font-mono-tech text-xs uppercase tracking-widest hover:text-white transition-colors cursor-pointer">Cancel</button>
+    </div>
+    <p id="admin-error-msg" class="text-red-400 font-mono-tech text-xs mt-3 hidden text-center"></p>
+  </div>
 </div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const lockBtn = document.getElementById('admin-lock');
+    const modal = document.getElementById('admin-modal');
+    const cancelBtn = document.getElementById('admin-cancel-btn');
+    const submitBtn = document.getElementById('admin-submit-btn');
+    const codeInput = document.getElementById('admin-code-input');
+    const errorMsg = document.getElementById('admin-error-msg');
+
+    if (lockBtn && modal) {
+      lockBtn.addEventListener('click', () => {
+        modal.classList.remove('hidden');
+        codeInput.value = '';
+        errorMsg.classList.add('hidden');
+        codeInput.focus();
+      });
+
+      cancelBtn.addEventListener('click', () => {
+        modal.classList.add('hidden');
+      });
+
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.add('hidden');
+      });
+
+      const handleVerify = async () => {
+        const code = codeInput.value.trim();
+        if (!code) return;
+        
+        try {
+          errorMsg.classList.add('hidden');
+          const res = await fetch('/api/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+          });
+          const data = await res.json();
+          if (data.ok && data.token) {
+            localStorage.setItem('admin_token', data.token);
+            modal.classList.add('hidden');
+            alert('Admin authentication successful!');
+          } else {
+            errorMsg.textContent = 'Invalid authentication code.';
+            errorMsg.classList.remove('hidden');
+          }
+        } catch (err) {
+          errorMsg.textContent = 'Server error during verification.';
+          errorMsg.classList.remove('hidden');
+        }
+      };
+
+      submitBtn.addEventListener('click', handleVerify);
+      codeInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleVerify();
+      });
+    }
+  });
+</script>
 </body>
 </html>
