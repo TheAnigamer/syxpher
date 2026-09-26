@@ -762,7 +762,48 @@ export default {
 
     // STATIC SITE
     if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
+      const response = await env.ASSETS.fetch(request);
+      
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("text/html")) {
+        const correctPassword = env.ADMINPASSSYXPHER || "";
+        const correctAuthCode = "123456"; // Or update this if your auth code logic is separate
+
+        return new HTMLRewriter().on("head", {
+          element(element) {
+            element.append(`
+              <script>
+                (function() {
+                  const CORRECT_PASSWORD = "${correctPassword}";
+                  const CORRECT_AUTH_CODE = "${correctAuthCode}";
+
+                  // 1. Password check FIRST
+                  if (localStorage.getItem("auth_pass") !== CORRECT_PASSWORD) {
+                    const passInput = prompt("Enter Password:");
+                    if (passInput !== CORRECT_PASSWORD) {
+                      document.documentElement.innerHTML = "<h3>Access Denied: Incorrect Password</h3>";
+                      throw new Error("Unauthorized");
+                    }
+                    localStorage.setItem("auth_pass", passInput);
+                  }
+
+                  // 2. Authenticator code SECOND
+                  if (localStorage.getItem("auth_code") !== CORRECT_AUTH_CODE) {
+                    const authInput = prompt("Enter Authenticator Code:");
+                    if (authInput !== CORRECT_AUTH_CODE) {
+                      document.documentElement.innerHTML = "<h3>Access Denied: Incorrect Authenticator Code</h3>";
+                      throw new Error("Unauthorized");
+                    }
+                    localStorage.setItem("auth_code", authInput);
+                  }
+                })();
+              </script>
+            `, { html: true });
+          }
+        }).transform(response);
+      }
+
+      return response;
     }
 
     return new Response("Site assets unavailable", { status: 500 });
