@@ -95,15 +95,24 @@ async function createAdminToken(env) {
 
 async function verifyAdminToken(token, env) {
   try {
-    if (!token || !token.includes(".")) return false;
+    if (!token || !token.includes(".")) {
+      console.log("Auth debug: Token missing or invalid format");
+      return false;
+    }
 
     const [encoded, sigHex] = token.split(".");
 
     const payload = atob(encoded);
     const [role, expires] = payload.split(":");
 
-    if (role !== "admin") return false;
-    if (Date.now() > Number(expires)) return false;
+    if (role !== "admin") {
+      console.log("Auth debug: Invalid role in payload:", role);
+      return false;
+    }
+    if (Date.now() > Number(expires)) {
+      console.log("Auth debug: Token expired");
+      return false;
+    }
 
     const tokenSecret = env.ADMIN_TOKEN_SECRET || env.ADMINPASSSYXPHER || "fallback_token_secret_key";
     const key = await crypto.subtle.importKey(
@@ -122,7 +131,10 @@ async function verifyAdminToken(token, env) {
 
     const expectedSigHex = bufferToHex(expectedSignature);
 
-    if (sigHex.length !== expectedSigHex.length) return false;
+    if (sigHex.length !== expectedSigHex.length) {
+      console.log("Auth debug: Signature length mismatch");
+      return false;
+    }
 
     let difference = 0;
 
@@ -130,9 +142,14 @@ async function verifyAdminToken(token, env) {
       difference |= sigHex.charCodeAt(i) ^ expectedSigHex.charCodeAt(i);
     }
 
-    return difference === 0;
+    if (difference !== 0) {
+      console.log("Auth debug: Signature hash mismatch (Secret key mismatch between creation and verification)");
+      return false;
+    }
+
+    return true;
   } catch (err) {
-    console.error("Token verification failed:", err);
+    console.error("Token verification exception:", err);
     return false;
   }
 }
