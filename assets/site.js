@@ -388,116 +388,15 @@ async function adminFetch(
 // AUTHENTICATION
 // ==========================================
 
-document.addEventListener(
-  'DOMContentLoaded',
-  () => {
-    const lock =
-      document.getElementById(
-        'admin-lock'
-      );
+document.addEventListener('DOMContentLoaded', () => {
+  const lock = document.getElementById('admin-lock');
+  if (!lock) return;
 
-    if (!lock) return;
-
-    if (
-      isAdminAuthenticated()
-    ) {
-      lock.textContent =
-        '🔓';
-
-      lock.title =
-        'Admin Mode Enabled';
-
-      createAdminPanel();
-    }
-
-    lock.addEventListener(
-      'click',
-      async () => {
-
-        if (
-          isAdminAuthenticated()
-        ) {
-          openAdminPanel();
-          return;
-        }
-
-        const code =
-          prompt(
-            'Enter your Authenticator code:'
-          );
-
-        if (!code) return;
-
-        try {
-          const response =
-            await fetch(
-              '/api/verify',
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type':
-                    'application/json'
-                },
-                body:
-                  JSON.stringify({
-                    code:
-                      code.trim()
-                  })
-              }
-            );
-
-          const result =
-            await response.json();
-
-          if (result.ok) {
-
-            sessionStorage.setItem(
-              'adminAuthenticated',
-              'true'
-            );
-
-            if (result.token) {
-              sessionStorage.setItem(
-                'adminToken',
-                result.token
-              );
-            }
-
-            lock.textContent =
-              '🔓';
-
-            lock.title =
-              'Admin Mode Enabled';
-
-            createAdminPanel();
-
-            alert(
-              'Admin mode enabled.'
-            );
-
-            openAdminPanel();
-
-          } else {
-            alert(
-              'Invalid Authenticator code.'
-            );
-          }
-
-        } catch (error) {
-
-          console.error(
-            'Authentication error:',
-            error
-          );
-
-          alert(
-            'Could not connect to the authentication server.'
-          );
-        }
-      }
-    );
-  }
-);
+  lock.addEventListener('click', (e) => {
+    e.preventDefault();
+    window.location.href = '/admin';
+  });
+});
 
 
 // ==========================================
