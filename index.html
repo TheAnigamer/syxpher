@@ -498,26 +498,6 @@
           alert("Invalid Password");
           return;
         }
-        
-        // Step 2: If password is correct, prompt for Authenticator code
-        const code = prompt("Enter your Authenticator code:");
-        if (!code) return;
-        
-        const res2 = await fetch('/api/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password, code })
-        });
-        const data2 = await res2.json();
-        
-        if (data2.ok) {
-          window.location.reload();
-        } else {
-          alert("Invalid Authenticator Code");
-        }
-      } catch (e) {
-        alert("Verification failed");
-      }
     });
   }
 </script>
