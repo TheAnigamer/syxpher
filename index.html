@@ -475,13 +475,13 @@
 </div>
 
 <script>
-  // Clean up old listeners and attach the correct two-step prompt flow
-  const oldBtn = document.getElementById('admin-lock');
-  if (oldBtn) {
-    const adminLockBtn = oldBtn.cloneNode(true);
-    oldBtn.parentNode.replaceChild(adminLockBtn, oldBtn);
+  const adminLockBtn = document.getElementById('admin-lock');
+  if (adminLockBtn) {
+    // Capture the click first and stop all other listeners from firing
+    adminLockBtn.addEventListener('click', async (e) => {
+      e.stopImmediatePropagation();
+      e.preventDefault();
 
-    adminLockBtn.addEventListener('click', async () => {
       // Step 1: Prompt for password first
       const password = prompt("Enter Admin Password:");
       if (!password) return;
@@ -498,7 +498,27 @@
           alert("Invalid Password");
           return;
         }
-    });
+        
+        // Step 2: If password is correct, prompt for Authenticator code
+        const code = prompt("Enter your Authenticator code:");
+        if (!code) return;
+        
+        const res2 = await fetch('/api/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password, code })
+        });
+        const data2 = await res2.json();
+        
+        if (data2.ok) {
+          window.location.reload();
+        } else {
+          alert("Invalid Authenticator Code");
+        }
+      } catch (err) {
+        alert("Verification failed");
+      }
+    }, { capture: true });
   }
 </script>
 </body>
