@@ -511,7 +511,7 @@ function getLoginHtml() {
         });
         const data = await res.json();
         if (data.ok) {
-          window.location.reload();
+          
         } else {
           errorMsg.textContent = 'Invalid Authenticator Code';
           errorMsg.style.display = 'block';
