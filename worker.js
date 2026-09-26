@@ -742,7 +742,7 @@ export default {
       }
     }
 
-    // PUBLIC GEOMETRY DASH LEVELS
+// PUBLIC GEOMETRY DASH LEVELS
     if (
       (url.pathname === "/api/levels" || 
        url.pathname === "/api/gd-levels" || 
@@ -760,52 +760,60 @@ export default {
       }
     }
 
-    // STATIC SITE
-    if (env.ASSETS) {
-      const response = await env.ASSETS.fetch(request);
-      
-      const contentType = response.headers.get("content-type") || "";
-      if (contentType.includes("text/html")) {
-        const correctPassword = env.ADMINPASSSYXPHER || "";
-        const correctAuthCode = "123456"; // Or update this if your auth code logic is separate
+    const response = await env.ASSETS.fetch(request);
+    const correctPassword = env.ADMINPASSSYXPHER || "";
 
-        return new HTMLRewriter().on("head", {
-          element(element) {
-            element.append(`
-              <script>
-                (function() {
-                  const CORRECT_PASSWORD = "${correctPassword}";
-                  const CORRECT_AUTH_CODE = "${correctAuthCode}";
+    return new HTMLRewriter().on("html", {
+      element(element) {
+        element.prepend(`
+          <script>
+            (async function() {
+              const CORRECT_PASSWORD = "${correctPassword}";
 
-                  // 1. Password check FIRST
-                  if (localStorage.getItem("auth_pass") !== CORRECT_PASSWORD) {
-                    const passInput = prompt("Enter Password:");
-                    if (passInput !== CORRECT_PASSWORD) {
-                      document.documentElement.innerHTML = "<h3>Access Denied: Incorrect Password</h3>";
-                      throw new Error("Unauthorized");
-                    }
-                    localStorage.setItem("auth_pass", passInput);
+              // 1. Password check FIRST (Client-side localStorage)
+              if (localStorage.getItem("auth_pass") !== CORRECT_PASSWORD) {
+                const passInput = prompt("Enter Password:");
+                if (passInput !== CORRECT_PASSWORD) {
+                  document.documentElement.innerHTML = "<h3>Access Denied: Incorrect Password</h3>";
+                  throw new Error("Unauthorized");
+                }
+                localStorage.setItem("auth_pass", passInput);
+              }
+
+              // 2. Authenticator code SECOND (Validated against your real /api/verify backend)
+              if (localStorage.getItem("auth_verified") !== "true") {
+                const codeInput = prompt("Enter Authenticator Code:");
+                if (!codeInput) {
+                  document.documentElement.innerHTML = "<h3>Access Denied: No Code Provided</h3>";
+                  throw new Error("Unauthorized");
+                }
+
+                try {
+                  const res = await fetch("/api/verify", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ code: codeInput })
+                  });
+                  const data = await res.json();
+                  
+                  if (!data.ok) {
+                    document.documentElement.innerHTML = "<h3>Access Denied: Incorrect Authenticator Code</h3>";
+                    throw new Error("Unauthorized");
                   }
-
-                  // 2. Authenticator code SECOND
-                  if (localStorage.getItem("auth_code") !== CORRECT_AUTH_CODE) {
-                    const authInput = prompt("Enter Authenticator Code:");
-                    if (authInput !== CORRECT_AUTH_CODE) {
-                      document.documentElement.innerHTML = "<h3>Access Denied: Incorrect Authenticator Code</h3>";
-                      throw new Error("Unauthorized");
-                    }
-                    localStorage.setItem("auth_code", authInput);
+                  
+                  localStorage.setItem("auth_verified", "true");
+                  if (data.token) {
+                    localStorage.setItem("admin_token", data.token);
                   }
-                })();
-              </script>
-            `, { html: true });
-          }
-        }).transform(response);
+                } catch (e) {
+                  document.documentElement.innerHTML = "<h3>Access Denied: Verification Failed</h3>";
+                  throw new Error("Unauthorized");
+                }
+              }
+            })();
+          </script>
+        `, { html: true });
       }
-
-      return response;
-    }
-
-    return new Response("Site assets unavailable", { status: 500 });
+    }).transform(response);
   }
 };
