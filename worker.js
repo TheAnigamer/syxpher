@@ -899,4 +899,10 @@ export default {
       // If authenticated, serve index.html so your frontend app loads
       return env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
     }
+
+    if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
+
+    return env.ASSETS.fetch(request);
+
+    }
 };
