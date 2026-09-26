@@ -761,59 +761,75 @@ export default {
     }
 
     const response = await env.ASSETS.fetch(request);
-    const correctPassword = env.ADMINPASSSYXPHER || "";
+    const contentType = response.headers.get("content-type") || "";
 
-    return new HTMLRewriter().on("html", {
-      element(element) {
-        element.prepend(`
-          <script>
-            (async function() {
-              const CORRECT_PASSWORD = "${correctPassword}";
+    // If it's an HTML page, inject the password & authenticator checks directly into the text
+    if (contentType.includes("text/html")) {
+      let html = await response.text();
+      const correctPassword = env.ADMINPASSSYXPHER || "";
 
-              // 1. Password check FIRST (Client-side localStorage)
-              if (localStorage.getItem("auth_pass") !== CORRECT_PASSWORD) {
-                const passInput = prompt("Enter Password:");
-                if (passInput !== CORRECT_PASSWORD) {
-                  document.documentElement.innerHTML = "<h3>Access Denied: Incorrect Password</h3>";
-                  throw new Error("Unauthorized");
-                }
-                localStorage.setItem("auth_pass", passInput);
+      const protectionScript = `
+        <script>
+          (async function() {
+            const CORRECT_PASSWORD = "${correctPassword}";
+
+            // 1. Password check FIRST
+            if (localStorage.getItem("auth_pass") !== CORRECT_PASSWORD) {
+              const passInput = prompt("Enter Password:");
+              if (passInput !== CORRECT_PASSWORD) {
+                document.documentElement.innerHTML = "<h3>Access Denied: Incorrect Password</h3>";
+                throw new Error("Unauthorized");
+              }
+              localStorage.setItem("auth_pass", passInput);
+            }
+
+            // 2. Authenticator code SECOND (Validated against your /api/verify backend)
+            if (localStorage.getItem("auth_verified") !== "true") {
+              const codeInput = prompt("Enter Authenticator Code:");
+              if (!codeInput) {
+                document.documentElement.innerHTML = "<h3>Access Denied: No Code Provided</h3>";
+                throw new Error("Unauthorized");
               }
 
-              // 2. Authenticator code SECOND (Validated against your real /api/verify backend)
-              if (localStorage.getItem("auth_verified") !== "true") {
-                const codeInput = prompt("Enter Authenticator Code:");
-                if (!codeInput) {
-                  document.documentElement.innerHTML = "<h3>Access Denied: No Code Provided</h3>";
+              try {
+                const res = await fetch("/api/verify", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ code: codeInput })
+                });
+                const data = await res.json();
+                
+                if (!data.ok) {
+                  document.documentElement.innerHTML = "<h3>Access Denied: Incorrect Authenticator Code</h3>";
                   throw new Error("Unauthorized");
                 }
-
-                try {
-                  const res = await fetch("/api/verify", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ code: codeInput })
-                  });
-                  const data = await res.json();
-                  
-                  if (!data.ok) {
-                    document.documentElement.innerHTML = "<h3>Access Denied: Incorrect Authenticator Code</h3>";
-                    throw new Error("Unauthorized");
-                  }
-                  
-                  localStorage.setItem("auth_verified", "true");
-                  if (data.token) {
-                    localStorage.setItem("admin_token", data.token);
-                  }
-                } catch (e) {
-                  document.documentElement.innerHTML = "<h3>Access Denied: Verification Failed</h3>";
-                  throw new Error("Unauthorized");
+                
+                localStorage.setItem("auth_verified", "true");
+                if (data.token) {
+                  localStorage.setItem("admin_token", data.token);
                 }
+              } catch (e) {
+                document.documentElement.innerHTML = "<h3>Access Denied: Verification Failed</h3>";
+                throw new Error("Unauthorized");
               }
-            })();
-          </script>
-        `, { html: true });
+            }
+          })();
+        </script>
+      `;
+
+      // Inject right after the <head> tag
+      if (html.includes("<head>")) {
+        html = html.replace("<head>", "<head>" + protectionScript);
+      } else {
+        html = protectionScript + html;
       }
-    }).transform(response);
+
+      return new Response(html, {
+        status: response.status,
+        headers: response.headers
+      });
+    }
+
+    return response;
   }
 };
