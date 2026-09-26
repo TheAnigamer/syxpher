@@ -888,10 +888,15 @@ export default {
       });
     }
 
-    if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
-      return env.ASSETS.fetch(request);
+    if (url.pathname === "/admin") {
+      const auth = await requireAdmin(request, env);
+      if (!auth) {
+        return new Response(getLoginHtml(), {
+          status: 200,
+          headers: { "Content-Type": "text/html;charset=UTF-8" }
+        });
+      }
+      // If authenticated, serve index.html so your frontend app loads
+      return env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
     }
-
-    return new Response("Asset binding not configured", { status: 404 });
-  }
 };
