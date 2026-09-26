@@ -1,7 +1,7 @@
 async function verifyTOTP(secret, code) {
   if (!secret) return false;
 
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   secret = secret.replace(/[\s=]/g, "").toUpperCase();
 
   let bits = "";
