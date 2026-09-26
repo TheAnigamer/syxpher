@@ -96,22 +96,23 @@ async function createAdminToken(env) {
 async function verifyAdminToken(token, env) {
   try {
     if (!token || !token.includes(".")) {
-      console.log("Auth debug: Token missing or invalid format");
-      return false;
+      return { valid: false, reason: "missing_or_invalid_format" };
     }
 
     const [encoded, sigHex] = token.split(".");
-
-    const payload = atob(encoded);
-    const [role, expires] = payload.split(":");
+    let payload, role, expires;
+    try {
+      payload = atob(encoded);
+      [role, expires] = payload.split(":");
+    } catch (e) {
+      return { valid: false, reason: "payload_decode_failed" };
+    }
 
     if (role !== "admin") {
-      console.log("Auth debug: Invalid role in payload:", role);
-      return false;
+      return { valid: false, reason: "invalid_role:" + role };
     }
     if (Date.now() > Number(expires)) {
-      console.log("Auth debug: Token expired");
-      return false;
+      return { valid: false, reason: "expired" };
     }
 
     const tokenSecret = env.ADMIN_TOKEN_SECRET || env.ADMINPASSSYXPHER || "fallback_token_secret_key";
@@ -132,8 +133,7 @@ async function verifyAdminToken(token, env) {
     const expectedSigHex = bufferToHex(expectedSignature);
 
     if (sigHex.length !== expectedSigHex.length) {
-      console.log("Auth debug: Signature length mismatch");
-      return false;
+      return { valid: false, reason: "sig_length_mismatch" };
     }
 
     let difference = 0;
@@ -143,14 +143,12 @@ async function verifyAdminToken(token, env) {
     }
 
     if (difference !== 0) {
-      console.log("Auth debug: Signature hash mismatch (Secret key mismatch between creation and verification)");
-      return false;
+      return { valid: false, reason: "sig_mismatch_secret_key_differs" };
     }
 
-    return true;
+    return { valid: true, reason: "ok" };
   } catch (err) {
-    console.error("Token verification exception:", err);
-    return false;
+    return { valid: false, reason: "exception:" + err.message };
   }
 }
 
@@ -169,13 +167,13 @@ function json(data, status = 200, extraHeaders = {}) {
 async function requireAdmin(request, env) {
   const auth = request.headers.get("Authorization") || "";
   if (auth.startsWith("Bearer ")) {
-    return verifyAdminToken(auth.slice(7), env);
+    return (await verifyAdminToken(auth.slice(7), env)).valid;
   }
   
   const cookieHeader = request.headers.get("Cookie") || "";
   const match = cookieHeader.match(/admin_token=([^;]+)/);
   if (match) {
-    return verifyAdminToken(match[1], env);
+    return (await verifyAdminToken(match[1], env)).valid;
   }
   
   return false;
@@ -874,19 +872,26 @@ export default {
 
     const cookieHeader = request.headers.get("Cookie") || "";
     const match = cookieHeader.match(/admin_token=([^;]+)/);
-    let isAuthenticated = false;
+    let authResult = { valid: false, reason: "no_cookie" };
 
     if (match) {
-      isAuthenticated = await verifyAdminToken(match[1], env);
+      authResult = await verifyAdminToken(match[1], env);
     }
 
-    if (!isAuthenticated) {
+    if (!authResult.valid) {
       return new Response(getLoginHtml(), {
         status: 200,
-        headers: { "Content-Type": "text/html;charset=UTF-8" }
+        headers: {
+          "Content-Type": "text/html;charset=UTF-8",
+          "X-Auth-Debug": authResult.reason
+        }
       });
     }
 
-    return env.ASSETS.fetch(request);
+    if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
+      return env.ASSETS.fetch(request);
+    }
+
+    return new Response("Asset binding not configured", { status: 404 });
   }
 };
