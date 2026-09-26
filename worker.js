@@ -1,7 +1,12 @@
+function bufferToHex(buffer) {
+  return Array.from(new Uint8Array(buffer))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 async function verifyTOTP(secret, code) {
   if (!secret) return false;
 
-  // If a full otpauth URL was pasted, extract just the secret value
   if (secret.toUpperCase().includes("SECRET=")) {
     const match = secret.match(/secret=([A-Z2-7=+]+)/i);
     if (match) secret = match[1];
@@ -76,40 +81,25 @@ async function createAdminToken(env) {
     ["sign"]
   );
 
-  const signature = new Uint8Array(
-    await crypto.subtle.sign(
-      "HMAC",
-      key,
-      new TextEncoder().encode(payload)
-    )
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(payload)
   );
 
-  const encoded = btoa(
-    String.fromCharCode(
-      ...new TextEncoder().encode(payload)
-    )
-  );
+  const encodedPayload = btoa(payload);
+  const sigHex = bufferToHex(signature);
 
-  const sig = btoa(
-    String.fromCharCode(...signature)
-  );
-
-  return `${encoded}.${sig}`;
+  return `${encodedPayload}.${sigHex}`;
 }
 
 async function verifyAdminToken(token, env) {
   try {
     if (!token || !token.includes(".")) return false;
 
-    const [encoded, sig] = token.split(".");
+    const [encoded, sigHex] = token.split(".");
 
-    const payload = new TextDecoder().decode(
-      Uint8Array.from(
-        atob(encoded),
-        c => c.charCodeAt(0)
-      )
-    );
-
+    const payload = atob(encoded);
     const [role, expires] = payload.split(":");
 
     if (role !== "admin") return false;
@@ -124,29 +114,25 @@ async function verifyAdminToken(token, env) {
       ["sign"]
     );
 
-    const expected = new Uint8Array(
-      await crypto.subtle.sign(
-        "HMAC",
-        key,
-        new TextEncoder().encode(payload)
-      )
+    const expectedSignature = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      new TextEncoder().encode(payload)
     );
 
-    const actual = Uint8Array.from(
-      atob(sig),
-      c => c.charCodeAt(0)
-    );
+    const expectedSigHex = bufferToHex(expectedSignature);
 
-    if (actual.length !== expected.length) return false;
+    if (sigHex.length !== expectedSigHex.length) return false;
 
     let difference = 0;
 
-    for (let i = 0; i < expected.length; i++) {
-      difference |= expected[i] ^ actual[i];
+    for (let i = 0; i < expectedSigHex.length; i++) {
+      difference |= sigHex.charCodeAt(i) ^ expectedSigHex.charCodeAt(i);
     }
 
     return difference === 0;
-  } catch {
+  } catch (err) {
+    console.error("Token verification failed:", err);
     return false;
   }
 }
@@ -169,7 +155,6 @@ async function requireAdmin(request, env) {
     return verifyAdminToken(auth.slice(7), env);
   }
   
-  // Fallback: Check cookies for admin session
   const cookieHeader = request.headers.get("Cookie") || "";
   const match = cookieHeader.match(/admin_token=([^;]+)/);
   if (match) {
@@ -428,7 +413,6 @@ async function getAllLevels(env) {
   return combined;
 }
 
-// Helper for serving the two-step clean login challenge page
 function getLoginHtml() {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -531,7 +515,6 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // ADMIN LOGIN / VERIFY API
     if (url.pathname === "/api/verify" && request.method === "POST") {
       try {
         const body = await request.json();
@@ -540,30 +523,25 @@ export default {
         
         const correctPassword = env.ADMINPASSSYXPHER || "";
         
-        // Always verify the password first
         if (password !== correctPassword) {
           return json({ ok: false, error: "Invalid Password" }, 401);
         }
 
-        // If only password was provided (step 1), return success for password verification
         if (!code) {
           return json({ ok: true, step: "password_verified" }, 200);
         }
 
-        // Validate TOTP code (step 2)
         if (!/^\d{6}$/.test(code)) return json({ ok: false, error: "Invalid Code" }, 400);
         const valid = await verifyTOTP(env.TOTP_SECRET, code);
         if (!valid) return json({ ok: false, error: "Invalid Code" }, 401);
 
         const token = await createAdminToken(env);
         
-        // Dynamically apply Secure flag only if using HTTPS (fixes local http:// testing loops)
         const isSecure = url.protocol === "https:";
         const secureAttr = isSecure ? "Secure; " : "";
 
-        // Return success and set secure HttpOnly cookie
         return json({ ok: true, token }, 200, {
-          "Set-Cookie": `admin_token=${token}; Path=/; ${secureAttr}HttpOnly; SameSite=Strict; Max-Age=604800`
+          "Set-Cookie": `admin_token=${token}; Path=/; ${secureAttr}HttpOnly; SameSite=Lax; Max-Age=604800`
         });
       } catch (error) {
         console.error(error);
@@ -571,7 +549,6 @@ export default {
       }
     }
 
-    // PUBLIC SITE SETTINGS
     if (url.pathname === "/api/site-settings" && request.method === "GET") {
       try {
         const settings = await getSiteSettings(env);
@@ -582,7 +559,6 @@ export default {
       }
     }
 
-    // ADMIN SITE SETTINGS GET
     if (url.pathname === "/api/admin/site-settings" && request.method === "GET") {
       if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
@@ -594,7 +570,6 @@ export default {
       }
     }
 
-    // ADMIN SITE SETTINGS PUT
     if (url.pathname === "/api/admin/site-settings" && request.method === "PUT") {
       if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
@@ -619,7 +594,6 @@ export default {
       }
     }
 
-    // PUBLIC SHOWCASE
     if (url.pathname === "/api/showcase" && request.method === "GET") {
       try {
         const { results } = await env.DB.prepare(
@@ -632,7 +606,6 @@ export default {
       }
     }
 
-    // ADMIN SHOWCASE GET
     if (url.pathname === "/api/admin/showcase" && request.method === "GET") {
       if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       const { results } = await env.DB.prepare(
@@ -641,7 +614,6 @@ export default {
       return json(results || []);
     }
 
-    // ADD SHOWCASE ITEM
     if (url.pathname === "/api/admin/showcase" && request.method === "POST") {
       if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
@@ -671,7 +643,6 @@ export default {
       }
     }
 
-    // EDIT SHOWCASE ITEM
     if (url.pathname.startsWith("/api/admin/showcase/") && request.method === "PUT") {
       if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
@@ -696,7 +667,6 @@ export default {
       }
     }
 
-    // DELETE SHOWCASE ITEM
     if (url.pathname.startsWith("/api/admin/showcase/") && request.method === "DELETE") {
       if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
@@ -709,7 +679,6 @@ export default {
       }
     }
 
-    // REORDER SHOWCASE
     if (url.pathname === "/api/admin/showcase/reorder" && request.method === "POST") {
       if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
@@ -728,7 +697,6 @@ export default {
       }
     }
 
-    // ADMIN GD LEVELS GET
     if ((url.pathname === "/api/admin/levels" || url.pathname === "/api/admin/gd-levels") && request.method === "GET") {
       if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
@@ -740,7 +708,6 @@ export default {
       }
     }
 
-    // ADD GD LEVEL
     if ((url.pathname === "/api/admin/levels" || url.pathname === "/api/admin/gd-levels") && request.method === "POST") {
       if (!(await requireAdmin(request, env))) return json({ error: "Unauthorized" }, 401);
       try {
@@ -779,7 +746,6 @@ export default {
       }
     }
 
-    // EDIT GD LEVEL
     if (
       (url.pathname.startsWith("/api/admin/levels/") || url.pathname.startsWith("/api/admin/gd-levels/")) &&
       !url.pathname.endsWith("/reorder") &&
@@ -817,7 +783,6 @@ export default {
       }
     }
 
-    // DELETE GD LEVEL
     if (
       (url.pathname.startsWith("/api/admin/levels/") || url.pathname.startsWith("/api/admin/gd-levels/")) &&
       !url.pathname.endsWith("/reorder") &&
@@ -843,7 +808,6 @@ export default {
       }
     }
 
-    // REORDER GD LEVELS
     if (
       (url.pathname === "/api/admin/levels/reorder" || url.pathname === "/api/admin/gd-levels/reorder") &&
       request.method === "POST"
@@ -874,7 +838,6 @@ export default {
       }
     }
 
-    // PUBLIC GEOMETRY DASH LEVELS
     if (
       (url.pathname === "/api/levels" || 
        url.pathname === "/api/gd-levels" || 
@@ -892,7 +855,6 @@ export default {
       }
     }
 
-    // AUTH CHECK FOR STATIC ASSETS / HTML PAGES
     const cookieHeader = request.headers.get("Cookie") || "";
     const match = cookieHeader.match(/admin_token=([^;]+)/);
     let isAuthenticated = false;
@@ -902,14 +864,12 @@ export default {
     }
 
     if (!isAuthenticated) {
-      // Serve the clean login card instead of letting unauthenticated users fetch the site
       return new Response(getLoginHtml(), {
         status: 200,
         headers: { "Content-Type": "text/html;charset=UTF-8" }
       });
     }
 
-    // If authenticated, serve assets normally with zero HTML modification
     return env.ASSETS.fetch(request);
   }
 };
