@@ -1,7 +1,7 @@
 async function verifyTOTP(secret, code) {
   if (!secret) return false;
 
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
   secret = secret.replace(/[\s=]/g, "").toUpperCase();
 
   let bits = "";
@@ -89,6 +89,20 @@ async function createAdminToken(env) {
 
   return `${encoded}.${sig}`;
 }
+
+// PASSWORD VERIFICATION ENDPOINT
+    if (url.pathname === "/api/verify-password" && request.method === "POST") {
+      try {
+        const { password } = await request.json();
+        const correctPassword = env.ADMINPASSSYXPHER || "";
+        if (password === correctPassword) {
+          return json({ ok: true });
+        }
+        return json({ ok: false }, 401);
+      } catch (err) {
+        return json({ ok: false }, 400);
+      }
+    }
 
 async function verifyAdminToken(token, env) {
   try {
