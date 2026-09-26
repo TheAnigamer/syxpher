@@ -1,6 +1,12 @@
 async function verifyTOTP(secret, code) {
   if (!secret) return false;
 
+  // If a full otpauth URL was pasted, extract just the secret value
+  if (secret.toUpperCase().includes("SECRET=")) {
+    const match = secret.match(/secret=([A-Z2-7=+]+)/i);
+    if (match) secret = match[1];
+  }
+
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   secret = secret.replace(/[\s=]/g, "").toUpperCase();
 
@@ -60,10 +66,11 @@ async function verifyTOTP(secret, code) {
 async function createAdminToken(env) {
   const expires = Date.now() + 30 * 60 * 1000;
   const payload = `admin:${expires}`;
+  const tokenSecret = env.ADMIN_TOKEN_SECRET || env.ADMINPASSSYXPHER || "fallback_token_secret_key";
 
   const key = await crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(env.ADMIN_TOKEN_SECRET),
+    new TextEncoder().encode(tokenSecret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
@@ -108,9 +115,10 @@ async function verifyAdminToken(token, env) {
     if (role !== "admin") return false;
     if (Date.now() > Number(expires)) return false;
 
+    const tokenSecret = env.ADMIN_TOKEN_SECRET || env.ADMINPASSSYXPHER || "fallback_token_secret_key";
     const key = await crypto.subtle.importKey(
       "raw",
-      new TextEncoder().encode(env.ADMIN_TOKEN_SECRET),
+      new TextEncoder().encode(tokenSecret),
       { name: "HMAC", hash: "SHA-256" },
       false,
       ["sign"]
@@ -420,108 +428,6 @@ async function getAllLevels(env) {
   return combined;
 }
 
-// Helper for serving the clean login challenge page
-function getLoginHtml() {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Restricted Access</title>
-  <style>
-    body { background: #0a0a0b; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-    .box { background: #111; border: 1px solid rgba(255,255,255,0.1); padding: 2rem; max-width: 340px; width: 100%; text-align: center; }
-    input { width: 100%; padding: 0.75rem; background: #0a0a0b; border: 1px solid rgba(255,255,255,0.2); color: #fff; margin-bottom: 1rem; box-sizing: border-box; font-family: monospace; }
-    input:focus { border-color: #ff9e00; outline: none; }
-    button { width: 100%; padding: 0.75rem; background: #ff9e00; border: none; color: #0a0a0b; font-weight: bold; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; }
-    button:hover { opacity: 0.9; }
-    .error { color: #ff4444; font-size: 0.8rem; margin-top: 0.5rem; display: none; }
-    label { display: block; text-align: left; font-size: 0.75rem; margin-bottom: 0.3rem; color: #aaa; text-transform: uppercase; }
-  </style>
-</head>
-<body>
-  <div class="box">
-    <h3>SECURE ACCESS</h3>
-    <form id="login-form">
-      <label for="password">Password</label>
-      <input type="password" id="password" required autocomplete="current-password">
-      
-      <label for="code">Authenticator Code</label>
-      <input type="text" id="code" pattern="\\d{6}" maxlength="6" required autocomplete="one-time-code" placeholder="000000">
-      
-      <button type="submit">Verify</button>
-      <div id="error-msg" class="error">Access Denied: Invalid Credentials</div>
-    </form>
-  </div>
-  <script>
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const pass = document.getElementById('password').value;
-      const code = document.getElementById('code').value;
-      const errorMsg = document.getElementById('error-msg');
-      
-      try {
-        const res = await fetch('/api/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: pass, code: code })
-        });
-        
-        const data = await res.json();
-        if (data.ok) {
-          window.location.reload();
-        } else {
-          errorMsg.style.display = 'block';
-        }
-      } catch (err) {
-        errorMsg.style.display = 'block';
-      }
-    });
-  </script>
-</body>
-</html>`;
-}
-
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-
-// ADMIN LOGIN / VERIFY API
-if (url.pathname === "/api/verify" && request.method === "POST") {
-  try {
-    const body = await request.json();
-    const code = String(body.code || "");
-    const password = String(body.password || "");
-    
-    const correctPassword = env.ADMINPASSSYXPHER || "";
-    
-    // Always verify the password first
-    if (password !== correctPassword) {
-      return json({ ok: false, error: "Invalid Password" }, 401);
-    }
-
-    // If only password was provided (step 1), return success for password verification
-    if (!code) {
-      return json({ ok: true, step: "password_verified" }, 200);
-    }
-
-    // Validate TOTP code (step 2)
-    if (!/^\d{6}$/.test(code)) return json({ ok: false, error: "Invalid Code" }, 400);
-    const valid = await verifyTOTP(env.TOTP_SECRET, code);
-    if (!valid) return json({ ok: false, error: "Invalid Code" }, 401);
-
-    const token = await createAdminToken(env);
-    
-    // Return success and set secure HttpOnly cookie
-    return json({ ok: true, token }, 200, {
-      "Set-Cookie": `admin_token=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=604800`
-    });
-  } catch (error) {
-    console.error(error);
-    return json({ ok: false }, 500);
-  }
-}
-
 // Helper for serving the two-step clean login challenge page
 function getLoginHtml() {
   return `<!DOCTYPE html>
@@ -620,6 +526,50 @@ function getLoginHtml() {
 </body>
 </html>`;
 }
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+
+    // ADMIN LOGIN / VERIFY API
+    if (url.pathname === "/api/verify" && request.method === "POST") {
+      try {
+        const body = await request.json();
+        const code = String(body.code || "");
+        const password = String(body.password || "");
+        
+        const correctPassword = env.ADMINPASSSYXPHER || "";
+        
+        // Always verify the password first
+        if (password !== correctPassword) {
+          return json({ ok: false, error: "Invalid Password" }, 401);
+        }
+
+        // If only password was provided (step 1), return success for password verification
+        if (!code) {
+          return json({ ok: true, step: "password_verified" }, 200);
+        }
+
+        // Validate TOTP code (step 2)
+        if (!/^\d{6}$/.test(code)) return json({ ok: false, error: "Invalid Code" }, 400);
+        const valid = await verifyTOTP(env.TOTP_SECRET, code);
+        if (!valid) return json({ ok: false, error: "Invalid Code" }, 401);
+
+        const token = await createAdminToken(env);
+        
+        // Dynamically apply Secure flag only if using HTTPS (fixes local http:// testing loops)
+        const isSecure = url.protocol === "https:";
+        const secureAttr = isSecure ? "Secure; " : "";
+
+        // Return success and set secure HttpOnly cookie
+        return json({ ok: true, token }, 200, {
+          "Set-Cookie": `admin_token=${token}; Path=/; ${secureAttr}HttpOnly; SameSite=Strict; Max-Age=604800`
+        });
+      } catch (error) {
+        console.error(error);
+        return json({ ok: false }, 500);
+      }
+    }
 
     // PUBLIC SITE SETTINGS
     if (url.pathname === "/api/site-settings" && request.method === "GET") {
