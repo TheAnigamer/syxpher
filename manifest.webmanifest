@@ -1,6 +1,6 @@
 {
-  "name": "Base44 APP",
-  "short_name": "Base44 APP",
+  "name": "Syxpher",
+  "short_name": "syx",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#0A0A0B",
