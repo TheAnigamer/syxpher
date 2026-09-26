@@ -486,36 +486,140 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // ADMIN LOGIN / VERIFY API
-    if (url.pathname === "/api/verify" && request.method === "POST") {
-      try {
-        const body = await request.json();
-        const code = String(body.code || "");
-        const password = String(body.password || "");
-        
-        const correctPassword = env.ADMINPASSSYXPHER || "";
-        
-        // Check password if provided in the body
-        if (password && password !== correctPassword) {
-          return json({ ok: false }, 401);
-        }
-
-        // Validate TOTP code
-        if (!/^\d{6}$/.test(code)) return json({ ok: false }, 400);
-        const valid = await verifyTOTP(env.TOTP_SECRET, code);
-        if (!valid) return json({ ok: false }, 401);
-
-        const token = await createAdminToken(env);
-        
-        // Return success and set a secure HttpOnly cookie valid for 7 days
-        return json({ ok: true, token }, 200, {
-          "Set-Cookie": `admin_token=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=604800`
-        });
-      } catch (error) {
-        console.error(error);
-        return json({ ok: false }, 500);
-      }
+// ADMIN LOGIN / VERIFY API
+if (url.pathname === "/api/verify" && request.method === "POST") {
+  try {
+    const body = await request.json();
+    const code = String(body.code || "");
+    const password = String(body.password || "");
+    
+    const correctPassword = env.ADMINPASSSYXPHER || "";
+    
+    // Always verify the password first
+    if (password !== correctPassword) {
+      return json({ ok: false, error: "Invalid Password" }, 401);
     }
+
+    // If only password was provided (step 1), return success for password verification
+    if (!code) {
+      return json({ ok: true, step: "password_verified" }, 200);
+    }
+
+    // Validate TOTP code (step 2)
+    if (!/^\d{6}$/.test(code)) return json({ ok: false, error: "Invalid Code" }, 400);
+    const valid = await verifyTOTP(env.TOTP_SECRET, code);
+    if (!valid) return json({ ok: false, error: "Invalid Code" }, 401);
+
+    const token = await createAdminToken(env);
+    
+    // Return success and set secure HttpOnly cookie
+    return json({ ok: true, token }, 200, {
+      "Set-Cookie": `admin_token=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=604800`
+    });
+  } catch (error) {
+    console.error(error);
+    return json({ ok: false }, 500);
+  }
+}
+
+// Helper for serving the two-step clean login challenge page
+function getLoginHtml() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Restricted Access</title>
+  <style>
+    body { background: #0a0a0b; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .box { background: #111; border: 1px solid rgba(255,255,255,0.1); padding: 2rem; max-width: 340px; width: 100%; text-align: center; }
+    input { width: 100%; padding: 0.75rem; background: #0a0a0b; border: 1px solid rgba(255,255,255,0.2); color: #fff; margin-bottom: 1rem; box-sizing: border-box; font-family: monospace; }
+    input:focus { border-color: #ff9e00; outline: none; }
+    button { width: 100%; padding: 0.75rem; background: #ff9e00; border: none; color: #0a0a0b; font-weight: bold; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; }
+    button:hover { opacity: 0.9; }
+    .error { color: #ff4444; font-size: 0.8rem; margin-top: 0.5rem; display: none; }
+    label { display: block; text-align: left; font-size: 0.75rem; margin-bottom: 0.3rem; color: #aaa; text-transform: uppercase; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h3 id="form-title">SECURE ACCESS</h3>
+    <form id="login-form">
+      <div id="step-password">
+        <label for="password">Password</label>
+        <input type="password" id="password" autocomplete="current-password" required>
+        <button type="button" id="next-btn">Next</button>
+      </div>
+      
+      <div id="step-code" class="hidden">
+        <label for="code">Authenticator Code</label>
+        <input type="text" id="code" pattern="\\d{6}" maxlength="6" autocomplete="one-time-code" placeholder="000000">
+        <button type="submit">Verify</button>
+      </div>
+
+      <div id="error-msg" class="error">Access Denied</div>
+    </form>
+  </div>
+  <script>
+    let verifiedPassword = "";
+    const errorMsg = document.getElementById('error-msg');
+
+    document.getElementById('next-btn').addEventListener('click', async () => {
+      const pass = document.getElementById('password').value;
+      if (!pass) return;
+      errorMsg.style.display = 'none';
+      
+      try {
+        const res = await fetch('/api/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pass })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          verifiedPassword = pass;
+          document.getElementById('step-password').classList.add('hidden');
+          document.getElementById('step-code').classList.remove('hidden');
+          document.getElementById('form-title').textContent = '2FA VERIFICATION';
+          document.getElementById('code').focus();
+        } else {
+          errorMsg.textContent = 'Invalid Password';
+          errorMsg.style.display = 'block';
+        }
+      } catch (err) {
+        errorMsg.textContent = 'Verification failed';
+        errorMsg.style.display = 'block';
+      }
+    });
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const code = document.getElementById('code').value;
+      errorMsg.style.display = 'none';
+      
+      try {
+        const res = await fetch('/api/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: verifiedPassword, code: code })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          window.location.reload();
+        } else {
+          errorMsg.textContent = 'Invalid Authenticator Code';
+          errorMsg.style.display = 'block';
+        }
+      } catch (err) {
+        errorMsg.textContent = 'Verification failed';
+        errorMsg.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>`;
+}
 
     // PUBLIC SITE SETTINGS
     if (url.pathname === "/api/site-settings" && request.method === "GET") {
